@@ -43,23 +43,25 @@ st.sidebar.title("Menu")
 ############################################################################
 
 selected = option_menu(
-    menu_title=None,
-    options=["Home", "Identifying Scaffolds", "SMILES Analysis", "Matched Molecular Pair Analysis"],
-    icons=["house", "1-square", "2-square", "3-square"],
+    menu_title="SAR Analysis Tools",
+    menu_icon="bar-chart-fill",
+    options=["DataFrame Viz", "Identifying Scaffolds", "SMILES Analysis", "MMP Analysis"],
+    icons=["0-square", "1-square", "2-square", "3-square"],
     default_index=0,
     orientation="horizontal"
 )
-if selected == "Home":
-    st.title("Molecule DataFrame Analysis and Visualisation")
+if selected == "DataFrame Viz":
+    st.title("Molecule DataFrame Visualisation")
 
     #st.header("Molecule DataFrame Analysis and Visualisation", divider='rainbow')
 
     st.markdown("Sometimes we have a CSV file containing SMILES and their properties, and we just wish to visualise it and analyse some of its properties. This web app is precisely for that.")
-    st.markdown("Specifically, this app let's you:")
-    st.markdown("- View the CSV file as a Pandas DataFrame")
-    st.markdown("- Compute stats on the numerical columns: mean, count, std, min, max etc.")
-    st.markdown("- Visualise the 2D structures of the molecules")
-    st.markdown("- Calculate RDKit descriptors: 2D Phys-chem descriptors, Morgan fingerprints or both")
+    st.markdown("Specifically, this page let's you:")
+    st.markdown("- :red[View] the CSV file as a Pandas DataFrame")
+    st.markdown("- :red[Compute] stats on the numerical columns: NaN count, mean, count, std, min, max etc.")
+    st.markdown("- :red[Plot] histograms, barplots, correlation heatmaps of the numerical columns")
+    st.markdown("- :red[Visualise] the 2D structures of the molecules")
+    st.markdown("- :red[Calculate] RDKit descriptors: 2D Phys-chem descriptors, Morgan fingerprints or both")
     st.subheader("Upload the CSV file")
     uploaded_file = st.file_uploader("", type=["csv"])
 
@@ -111,7 +113,7 @@ if selected == "Home":
         if len(numeric_cols) > 0:
             if len(numeric_cols) > 1:
                 st.subheader("Compute some column statistics")
-                st.write("**Descriptive Statistics:**")
+                st.write("**count, min, max, etc:**")
                 st.dataframe(df[numeric_cols].describe())
 
                 st.write("\n")
@@ -120,17 +122,30 @@ if selected == "Home":
                 st.markdown("First, let's look at the histograms of all numerical columns.")
                 
                 # Plot all columns with a high-res histogram
+                
+                #Give user options to change the default values
+                st.info("You can change the default values of number of bins, color and figure size below.") 
+                
+                #shift the slider to the left column
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    default_bins = st.slider("Number of bins", min_value=2, max_value=100, value=30, step=5)
+                with col2:
+                    default_color = st.color_picker("Pick a color for the histogram", value='#EE82EE')
+                with col3:
+                    default_size = st.slider("Figure size (width, height)", min_value=5, max_value=25, value=(14, 15), step=1)
+
                 fig = df.hist(
-                    bins=30,
-                    color='violet',
+                    bins=default_bins,
+                    color=default_color,
                     edgecolor='black',
                     layout=(len(numeric_cols) // 2 + 1, 3),
-                    figsize=(14, 15),   # Adjust width and height as needed
+                    figsize=default_size,
                     grid=True
                 )
 
                 plt.tight_layout()      # Prevents overlapping text
-                plt.gcf().set_dpi(150) # Set DPI for high resolution
+                plt.gcf().set_dpi(300) # Set DPI for high resolution
 
                 st.pyplot(plt.gcf())    # Show the whole figure in Streamlit
 
@@ -158,8 +173,16 @@ if selected == "Home":
                 st.write(f"Histogram for: {selected_column}")
 
                 # Prepare histogram
-                fig, ax = plt.subplots(figsize=(8, 6), dpi=150)  # High resolution
-                df[selected_column].hist(ax=ax, bins=30, color="skyblue", edgecolor="black")
+                col1_1, col2_1, col3_1 = st.columns(3)
+                with col1_1:
+                    default_bins_1 = st.slider("Bins", min_value=2, max_value=100, value=15, step=2)
+                with col2_1:
+                    default_color_1 = st.color_picker("Pick a color", value="#82EEDE")
+                with col3_1:
+                    default_size_1 = st.slider("Figure size - (width, height)", min_value=5, max_value=25, value=(6, 7), step=1)
+
+                fig, ax = plt.subplots(figsize=default_size_1, dpi=300)  # High resolution
+                df[selected_column].hist(ax=ax, bins=default_bins_1, color=default_color_1, edgecolor="black")
                 ax.set_title(f"Histogram of {selected_column}")
                 ax.set_xlabel(selected_column)
                 ax.set_ylabel("Frequency")
@@ -265,24 +288,29 @@ if selected == "Home":
             mols = []
             legends = []
             new_df['mol_2'] = new_df[smiles_col].apply(lambda x: Chem.MolFromSmiles(x))
+            
             #Add options to either display top 10 or all molecules
             display_option = st.radio("Display options:", ("All filtered molecules", "Display all molecules in the dataset (no filtering)"), index=0)
             
+            #choose legend from dropdown, list of columns, not mol column
+            legend_option = st.selectbox("Choose legend to display:", options=[col for col in new_df.columns if col != 'mol_2'], index=0)
+
             if display_option == "All filtered molecules":
                 display_count = len(new_df)
                 html_data = mols2grid.display(new_df.head(display_count), mol_col='mol_2', size=(200, 200), n_items_per_page=16, 
                                             #background_color="#403C3C",
                                             #atomColourPalette={6: (1, 1, 1)}
                                             fixedBondLength=25, clearBackground=False,
+                                            subset=["img",legend_option],
                                             ).data
-                st.components.v1.html(html_data, height=1000, scrolling=True)
+                st.components.v1.html(html_data, height=1100, scrolling=True)
             
             elif display_option == "Display all molecules in the dataset (no filtering)":
                 no_restricted_df = df.copy()
                 display_count = len(df)
                 no_restricted_df['mol_2'] = no_restricted_df[smiles_col].apply(lambda x: Chem.MolFromSmiles(x))
-                html_data = mols2grid.display(no_restricted_df.head(display_count), mol_col='mol_2', size=(200, 200), n_items_per_page=16, fixedBondLength=25, clearBackground=False).data
-                st.components.v1.html(html_data, height=1000, scrolling=True)
+                html_data = mols2grid.display(no_restricted_df.head(display_count), mol_col='mol_2', size=(200, 200), n_items_per_page=16, fixedBondLength=25, clearBackground=False, subset=["ID","img",legend_option]).data
+                st.components.v1.html(html_data, height=1100, scrolling=True)
         
         elif len(numeric_cols) == 0:
             st.info("No numerical columns found in the dataset. Cannot apply filters.")
@@ -290,8 +318,8 @@ if selected == "Home":
                 st.write("Displaying 2D structures of all molecules in the dataset.")
                 df['mol_2'] = df[smiles_col].apply(lambda x: Chem.MolFromSmiles(x))
                 display_count = len(df)
-                html_data = mols2grid.display(df.head(display_count), mol_col='mol_2', size=(200, 200), n_items_per_page=16, fixedBondLength=25, clearBackground=False).data
-                st.components.v1.html(html_data, height=1000, scrolling=True)
+                html_data = mols2grid.display(df.head(display_count), mol_col='mol_2', size=(200, 200), n_items_per_page=16, fixedBondLength=25, clearBackground=False, subset=["ID","img",legend_option]).data
+                st.components.v1.html(html_data, height=1100, scrolling=True)
             else:
                 st.error("No SMILES column found (case-insensitive). Cannot visualise 2D structures.")
         
@@ -307,9 +335,9 @@ if selected == "Home":
         # Define descriptor options
         basic_descs = ['MolWt', 'MolLogP', 'NumHDonors', 'NumHAcceptors']
 
-        desc_basic = st.checkbox("Calculate basic 2D descriptors")
-        desc_all = st.checkbox("Calculate all RDKit 2D descriptors")
-        desc_fp = st.checkbox("Calculate Morgan fingerprints")
+        desc_basic = st.checkbox("Basic 2D descriptors")
+        desc_all = st.checkbox("All RDKit 2D descriptors (200+)")
+        desc_fp = st.checkbox("Morgan fingerprints (radius=2, nBits=2048)")
         calculate = st.button("Calculate")
 
         if calculate:
