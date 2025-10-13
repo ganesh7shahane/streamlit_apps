@@ -207,6 +207,11 @@ if selected == "Home":
         ok_smiles = []
         delete_smiles = []
         i=0
+        
+        ####################################################################################
+        #
+        #   Check if all SMILES can be read by RDKit
+        ####################################################################################
 
         st.write("Checking if all SMILES strings can be read by RDKit...")
         for ds in df_smiles:
@@ -227,7 +232,11 @@ if selected == "Home":
             st.write("Removing these invalid SMILES strings from the dataset and proceeding...")
             df = df[~df[smiles_col].isin(delete_smiles)].reset_index(drop=True)
         
-        
+        ####################################################################################
+        #
+        #   Filter the dataframe based on the sliders
+        #
+        ####################################################################################
         if len(numeric_cols) > 0:
             st.write("To visualise 2D structures of all molecules, leave the sliders at their default values.")
             filters = {}
@@ -346,7 +355,7 @@ if selected == "Home":
         #
         ###########################################################################################
         st.subheader("Download the DataFrame as SDF")
-        st.markdown("You can download the DataFrame as an SDF file, which is a common format for storing molecular structures along with their associated data.")
+        #st.markdown("You can download the DataFrame as an SDF file, which is a common format for storing molecular structures along with their associated data.")
         
         #check if there is a mol column in the dataframe
         if 'mol' not in df_to_download.columns:
@@ -363,7 +372,7 @@ if selected == "Home":
         sdf_data = sdf_buffer.getvalue()
         sdf_buffer.close()
         
-        st.info("Click the button below to download the SDF file. If descriptors were calculated, they will be included as properties in the SDF file. Otherwise, only the orginal columns will be included.")
+        #st.info("Click the button below to download the SDF file. If descriptors were calculated, they will be included as properties in the SDF file. Otherwise, only the orginal columns will be included.")
         st.download_button(
             label="Download SDF",
             data=sdf_data,
