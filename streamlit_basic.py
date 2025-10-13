@@ -109,31 +109,32 @@ if selected == "Home":
         selected_cols = []
                 
         if len(numeric_cols) > 0:
-            st.subheader("Compute some column statistics")
-            st.write("**Descriptive Statistics:**")
-            st.dataframe(df[numeric_cols].describe())
+            if len(numeric_cols) > 1:
+                st.subheader("Compute some column statistics")
+                st.write("**Descriptive Statistics:**")
+                st.dataframe(df[numeric_cols].describe())
 
-            st.write("\n")
-            st.subheader("Histograms of Selected Columns")
-            st.markdown("Histograms are useful in determining the distribution of a property values.")
-            st.markdown("First, let's look at the histograms of all numerical columns.")
-            
-            # Plot all columns with a high-res histogram
-            fig = df.hist(
-                bins=30,
-                color='violet',
-                edgecolor='black',
-                layout=(len(numeric_cols) // 2 + 1, 3),
-                figsize=(14, 15),   # Adjust width and height as needed
-                grid=True
-            )
+                st.write("\n")
+                st.subheader("Histograms of Selected Columns")
+                #st.markdown("Histograms are useful in determining the distribution of a property values.")
+                st.markdown("First, let's look at the histograms of all numerical columns.")
+                
+                # Plot all columns with a high-res histogram
+                fig = df.hist(
+                    bins=30,
+                    color='violet',
+                    edgecolor='black',
+                    layout=(len(numeric_cols) // 2 + 1, 3),
+                    figsize=(14, 15),   # Adjust width and height as needed
+                    grid=True
+                )
 
-            plt.tight_layout()      # Prevents overlapping text
-            plt.gcf().set_dpi(150) # Set DPI for high resolution
+                plt.tight_layout()      # Prevents overlapping text
+                plt.gcf().set_dpi(150) # Set DPI for high resolution
 
-            st.pyplot(plt.gcf())    # Show the whole figure in Streamlit
+                st.pyplot(plt.gcf())    # Show the whole figure in Streamlit
 
-            st.write("**Now, select only one column to plot its histogram:**")
+            st.subheader("**Select a column to plot its histogram**")
 
             column_names = df.columns.tolist()
             cols = st.columns(2)
@@ -324,6 +325,7 @@ if selected == "Home":
                 result['NumRotatableBonds_1'] = [Descriptors.NumRotatableBonds(m) if m else None for m in mols]
                 result['TPSA_1'] = [Descriptors.TPSA(m) if m else None for m in mols]
                 result['SAScore_1'] = [sascorer.calculateScore(m) if m else None for m in mols]
+                result['QED_1'] = [Chem.QED.qed(m) if m else None for m in mols]
                 #add suffix _1 to all the columns
                 result.rename(columns={d: d + '_1' for d in basic_descs}, inplace=True)
             
@@ -464,13 +466,13 @@ if selected == "Identifying Scaffolds":
         ax.xaxis.grid(False)
         ax.yaxis.grid(True)
         
-        scaffold_df['count'].plot(kind='bar', ax=ax, color="skyblue", edgecolor="black")
-        ax.set_title(f"Barplot of Scaffold Counts")
+        scaffold_df['count'][:20].plot(kind='bar', ax=ax, color="skyblue", edgecolor="black")
+        ax.set_title(f"Barplot of top 20 Scaffold Counts")
         ax.set_xlabel("Scaffold ID")
         ax.set_ylabel("Number of molecules with the scaffold")
         st.pyplot(fig)
 
-        st.subheader(f"Let's visualise these scaffolds")
+        st.subheader(f"Let's visualise all the scaffolds")
         #Visualise the scaffolds
         mols = []
         legends = []
@@ -602,6 +604,7 @@ if selected == "SMILES Analysis":
                 "Number of H-bond Donors": Descriptors.NumHDonors,
                 "Number of H-bond Acceptors": Descriptors.NumHAcceptors,
                 "Topological Polar Surface Area (TPSA)": Descriptors.TPSA,
+                "QED": Chem.QED.qed,
                 "Number of Rotatable Bonds": Descriptors.NumRotatableBonds,
                 "Number of Aromatic Rings": Descriptors.NumAromaticRings,
                 "Number of Aliphatic Rings": Descriptors.NumAliphaticRings,
