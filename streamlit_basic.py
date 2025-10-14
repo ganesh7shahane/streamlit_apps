@@ -43,7 +43,7 @@ st.sidebar.title("Menu")
 ############################################################################
 
 selected = option_menu(
-    menu_title="SAR Analysis Tools",
+    menu_title="Structure-Activity Relationship (SAR) Analysis Tools",
     menu_icon="bar-chart-fill",
     options=["DataFrame Viz", "Identifying Scaffolds", "SMILES Analysis", "MMP Analysis"],
     icons=["0-square", "1-square", "2-square", "3-square"],
@@ -63,6 +63,7 @@ if selected == "DataFrame Viz":
     st.markdown("- :red[Visualise] the 2D structures of the molecules")
     st.markdown("- :red[Calculate] RDKit descriptors: 2D Phys-chem descriptors, Morgan fingerprints or both")
     st.subheader("Upload the CSV file")
+
     uploaded_file = st.file_uploader("", type=["csv"])
 
     ############################################################################
@@ -118,11 +119,8 @@ if selected == "DataFrame Viz":
 
                 st.write("\n")
                 st.subheader("Histograms of Selected Columns")
-                #st.markdown("Histograms are useful in determining the distribution of a property values.")
                 st.markdown("First, let's look at the histograms of all numerical columns.")
-                
-                # Plot all columns with a high-res histogram
-                
+                                
                 #Give user options to change the default values
                 st.info("You can change the default values of number of bins, color and figure size below.") 
                 
@@ -149,28 +147,14 @@ if selected == "DataFrame Viz":
 
                 st.pyplot(plt.gcf())    # Show the whole figure in Streamlit
 
-            st.subheader("**Select a column to plot its histogram**")
-
-            column_names = df.columns.tolist()
-            cols = st.columns(2)
-            half = (len(numeric_cols) + 1) // 2
-
-            # Create a list to hold selected columns
-            selected_column = None
-
-            # Place checkboxes in two columns, only allow one selection
-            with cols[0]:
-                for col in numeric_cols[:half]:
-                    if st.checkbox(col, key=col):
-                        selected_column = col
-            with cols[1]:
-                for col in numeric_cols[half:]:
-                    if st.checkbox(col, key=col):
-                        selected_column = col
+            st.subheader("**Draw a single histogram or bar plot**")
+            #select whether to draw a histogram or barplot
+            plot_type = st.selectbox("Select plot type", options=["Histogram", "Bar Plot"])
+            selected_column = st.selectbox("Select a column", options=numeric_cols)
 
             # Only one column should be selected; if more are selected, take the last
-            if selected_column:
-                st.write(f"Histogram for: {selected_column}")
+            if plot_type == "Histogram" and selected_column:
+                st.write(f"{plot_type} for: {selected_column}")
 
                 # Prepare histogram
                 col1_1, col2_1, col3_1 = st.columns(3)
@@ -181,13 +165,73 @@ if selected == "DataFrame Viz":
                 with col3_1:
                     default_size_1 = st.slider("Figure size - (width, height)", min_value=5, max_value=25, value=(6, 7), step=1)
 
-                fig, ax = plt.subplots(figsize=default_size_1, dpi=300)  # High resolution
+                fig, ax = plt.subplots(figsize=default_size_1, dpi=200)  # High resolution
                 df[selected_column].hist(ax=ax, bins=default_bins_1, color=default_color_1, edgecolor="black")
                 ax.set_title(f"Histogram of {selected_column}")
                 ax.set_xlabel(selected_column)
                 ax.set_ylabel("Frequency")
                 st.pyplot(fig)
-        
+            
+            elif plot_type == "Bar Plot" and selected_column:
+                st.write(f"{plot_type} for: {selected_column}")
+
+                # Let user select which column to plot
+                numeric_cols = df.select_dtypes(include=np.number).columns.tolist()
+                #selected_col = st.selectbox("Select a column to plot:", numeric_cols)
+
+                # Automatically suggest bin width
+                col_min, col_max = df[selected_column].min(), df[selected_column].max()
+                default_bin_width = (col_max - col_min) / 10  # default ~10 bins
+
+                col1_2, col2_2, col3_2 = st.columns(3)
+                with col1_2:
+                    st.write(f"**Value range:** {col_min:.2f} to {col_max:.2f}")
+                with col2_2:
+                    bin_mode = st.radio("How do you want to define bins?", ["Auto", "Custom"], horizontal=True)
+                with col3_2:
+                    default_color_2 = st.color_picker("Pick a color", value="#125AF7")
+
+                if bin_mode == "Custom":
+                    bin_width = st.number_input("Enter bin width:", min_value=0.1, value=float(default_bin_width))
+                    #also put custom ranges separated by comma
+                    #custom_bins = st.text_input("Enter custom bin ranges (comma-separated):", value="")
+                else:
+                    bin_width = default_bin_width
+
+                # Create bins
+                bins = np.arange(col_min, col_max + bin_width, bin_width)
+                df["binned"] = pd.cut(df[selected_column], bins=bins, include_lowest=True)
+
+                # Count frequency per bin
+                bin_counts = df["binned"].value_counts().sort_index()
+
+                # Plot bar chart
+                fig, ax = plt.subplots(figsize=(8, 5), dpi=300)
+                ax.bar(bin_counts.index.astype(str), bin_counts.values, color=default_color_2, edgecolor="black")
+                #plot count on top of each bar
+                for i, v in enumerate(bin_counts.values):
+                    ax.text(i, v + 0.5, str(v), ha='center', va='bottom', fontsize=8)
+                ax.set_xlabel(selected_column)
+                ax.set_ylabel("Count")
+                ax.set_title(f"Distribution of {selected_column}")
+                plt.xticks(rotation=45, ha="right")
+
+                st.pyplot(fig)
+                
+                # # Prepare bar plot
+                # col1_2, col2_2 = st.columns(2)
+                # with col1_2:
+                #     default_color_2 = st.color_picker("Pick a color", value="#FF5733")
+                # with col2_2:
+                #     default_size_2 = st.slider("Figure size - (width, height)", min_value=5, max_value=25, value=(8, 5), step=1)
+                
+                # fig, ax = plt.subplots(figsize=default_size_2, dpi=300)  # High resolution
+                # df[selected_column].value_counts().sort_index().plot(kind='bar', ax=ax, color=default_color_2, edgecolor="black")
+                # ax.set_title(f"Bar Plot of {selected_column}")
+                # ax.set_xlabel(selected_column)
+                # ax.set_ylabel("Count")
+                # st.pyplot(fig)
+
             st.subheader("Correlation Heatmap")
             st.markdown("A correlation heatmap helps to visualize the correlation coefficients between multiple numerical columns in a dataset. It provides insights into how different variables relate to each other, which can be useful for feature selection and understanding relationships in the data.")
             if len(numeric_cols) > 1:
@@ -272,9 +316,9 @@ if selected == "DataFrame Viz":
                     max_val = float(df[col].max())
                     filters[col] = st.slider(
                     f"{col} range",
-                    min_value=min_val,
-                    max_value=max_val,
-                    value=(min_val, max_val)
+                    min_value=float(min_val),
+                    max_value=float(max_val),
+                    value=(float(min_val), float(max_val))
             )
 
             filtered_df = df.copy()
@@ -297,11 +341,10 @@ if selected == "DataFrame Viz":
 
             if display_option == "All filtered molecules":
                 display_count = len(new_df)
-                html_data = mols2grid.display(new_df.head(display_count), mol_col='mol_2', size=(200, 200), n_items_per_page=16, 
-                                            #background_color="#403C3C",
-                                            #atomColourPalette={6: (1, 1, 1)}
-                                            fixedBondLength=25, clearBackground=False,
+                html_data = mols2grid.display(new_df.head(display_count), mol_col='mol_2', size=(200, 200), 
                                             subset=["img",legend_option],
+                                            n_items_per_page=16, 
+                                            fixedBondLength=25, clearBackground=False,
                                             ).data
                 st.components.v1.html(html_data, height=1100, scrolling=True)
             
@@ -309,7 +352,7 @@ if selected == "DataFrame Viz":
                 no_restricted_df = df.copy()
                 display_count = len(df)
                 no_restricted_df['mol_2'] = no_restricted_df[smiles_col].apply(lambda x: Chem.MolFromSmiles(x))
-                html_data = mols2grid.display(no_restricted_df.head(display_count), mol_col='mol_2', size=(200, 200), n_items_per_page=16, fixedBondLength=25, clearBackground=False, subset=["ID","img",legend_option]).data
+                html_data = mols2grid.display(no_restricted_df.head(display_count), mol_col='mol_2', size=(200, 200), subset=["img",legend_option],n_items_per_page=16, fixedBondLength=25, clearBackground=False).data
                 st.components.v1.html(html_data, height=1100, scrolling=True)
         
         elif len(numeric_cols) == 0:
@@ -318,7 +361,7 @@ if selected == "DataFrame Viz":
                 st.write("Displaying 2D structures of all molecules in the dataset.")
                 df['mol_2'] = df[smiles_col].apply(lambda x: Chem.MolFromSmiles(x))
                 display_count = len(df)
-                html_data = mols2grid.display(df.head(display_count), mol_col='mol_2', size=(200, 200), n_items_per_page=16, fixedBondLength=25, clearBackground=False, subset=["ID","img",legend_option]).data
+                html_data = mols2grid.display(df.head(display_count), mol_col='mol_2', size=(200, 200), subset=["img",legend_option], n_items_per_page=16, fixedBondLength=25, clearBackground=False).data
                 st.components.v1.html(html_data, height=1100, scrolling=True)
             else:
                 st.error("No SMILES column found (case-insensitive). Cannot visualise 2D structures.")
