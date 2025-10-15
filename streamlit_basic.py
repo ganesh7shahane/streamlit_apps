@@ -217,20 +217,6 @@ if selected == "DataFrame Viz":
                 plt.xticks(rotation=45, ha="right")
 
                 st.pyplot(fig)
-                
-                # # Prepare bar plot
-                # col1_2, col2_2 = st.columns(2)
-                # with col1_2:
-                #     default_color_2 = st.color_picker("Pick a color", value="#FF5733")
-                # with col2_2:
-                #     default_size_2 = st.slider("Figure size - (width, height)", min_value=5, max_value=25, value=(8, 5), step=1)
-                
-                # fig, ax = plt.subplots(figsize=default_size_2, dpi=300)  # High resolution
-                # df[selected_column].value_counts().sort_index().plot(kind='bar', ax=ax, color=default_color_2, edgecolor="black")
-                # ax.set_title(f"Bar Plot of {selected_column}")
-                # ax.set_xlabel(selected_column)
-                # ax.set_ylabel("Count")
-                # st.pyplot(fig)
 
             st.subheader("Correlation Heatmap")
             st.markdown("A correlation heatmap helps to visualize the correlation coefficients between multiple numerical columns in a dataset. It provides insights into how different variables relate to each other, which can be useful for feature selection and understanding relationships in the data.")
@@ -352,6 +338,8 @@ if selected == "DataFrame Viz":
                 no_restricted_df = df.copy()
                 display_count = len(df)
                 no_restricted_df['mol_2'] = no_restricted_df[smiles_col].apply(lambda x: Chem.MolFromSmiles(x))
+                #AllChem.Compute2DCoords(no_restricted_df['mol_2'][0])
+                #[AllChem.GenerateDepictionMatching2DStructure(m,no_restricted_df['mol_2'][0]) for m in no_restricted_df['mol_2']]
                 html_data = mols2grid.display(no_restricted_df.head(display_count), mol_col='mol_2', size=(200, 200), subset=["img",legend_option],n_items_per_page=16, fixedBondLength=25, clearBackground=False).data
                 st.components.v1.html(html_data, height=1100, scrolling=True)
         
@@ -589,7 +577,6 @@ if selected == "Identifying Scaffolds":
             s = base64.b64encode(s.getvalue()).decode("utf-8").replace("\n", "")
             return '<img align="left" src="data:image/png;base64,%s">' % s
 
-
         def mol_to_base64_image(mol: Chem.Mol) -> str:
             """
             Convert an RDKit molecule to a base64 encoded image string.
@@ -613,8 +600,7 @@ if selected == "Identifying Scaffolds":
         
         #drop down menu to select the activity column
         numeric_cols = df.select_dtypes(include="number").columns.tolist()
-        st.write(":green[Select] the activity column from the dataframe.")
-        activity_col = st.selectbox(":red[**The activity values preferably should be in log scale**]", options=numeric_cols, index=0)
+        activity_col = st.selectbox(":green[Select] the activity column from the dataframe.",options=numeric_cols, index=0)
         #put the selected column in a variable
         st.write(f"Selected activity column: {activity_col}")
         
@@ -632,7 +618,6 @@ if selected == "Identifying Scaffolds":
             for smi in tmp_df['Murcko_Scaffold'].values:
                 img_list.append(boxplot_base64_image(df.query("Murcko_Scaffold == @smi")[activity_col].values, x_lim=[df[activity_col].min()*0.98, df[activity_col].max()*1.01]))
             tmp_df['dist_img'] = img_list
-            #HTML(tmp_df[['mol_img','count','dist_img']].to_html(escape=False))
             #display the dataframe with the images
             st.markdown(HTML(tmp_df[['mol_img','count','dist_img']].to_html(escape=False)).data, unsafe_allow_html=True)
         else:
@@ -642,8 +627,29 @@ if selected == "Identifying Scaffolds":
     #   Examine molecules with a given scaffold
     #
     ###############################################################################
-        
-        
+        st.subheader("Examine molecules with a given scaffold")
+        scaffold_id = st.selectbox("Select a scaffold index", options=scaffold_df.index.tolist())
+        scaffold_smi = scaffold_df.Murcko_Scaffold.values[scaffold_id]
+
+        tmp_df = df.query("Murcko_Scaffold == @scaffold_smi").copy() #put molecules with the scaffold in a new dataframe
+        tmp_df['mol'] = tmp_df[smiles_col].apply(Chem.MolFromSmiles) 
+        scaffold_mol = scaffold_df.mol.values[scaffold_id] #get mol object for the scaffold into scaffold_mol
+        AllChem.Compute2DCoords(scaffold_mol)
+        [AllChem.GenerateDepictionMatching2DStructure(m,scaffold_mol) for m in tmp_df.mol]
+
+        #concatenate legends
+        legend_ = st.selectbox("Select legend", options=[col for col in tmp_df.columns if col != 'mol'], index=0)
+        tmp_df['legend'] = tmp_df[legend_].astype(str)
+        #tmp_df['legend'] = tmp_df['GV'] + ' | ' + tmp_df['ROCK2_log'].astype(str)
+
+        #sort tmp_df as per ROCK2_log in descending order
+        tmp_df_sort = tmp_df.sort_values(activity_col, ascending=False)
+        #Draw molecules sorted as per ROCK2_log
+
+        st.write(f"There are {len(tmp_df_sort)} molecules with scaffold ID {scaffold_id}")
+        html_data = mols2grid.display(tmp_df_sort, mol_col='mol', size=(200, 200), subset=["img","legend"], n_items_per_page=16, fixedBondLength=25, clearBackground=False).data
+        st.components.v1.html(html_data, height=1100, scrolling=True)
+
 ############################################################################################
 #   SMILES Analysis
 ############################################################################################
