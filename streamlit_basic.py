@@ -669,33 +669,41 @@ if selected == "SMILES Analysis":
     if smiles_input:
         mol = Chem.MolFromSmiles(smiles_input)
         if mol:
-            st.subheader("2D Structure")
-            img = Draw.MolToImage(mol, size=(1200, 400))
-            st.image(img, caption="2D structure of the input SMILES", use_container_width=False)
             
-            st.subheader("Calculate 2D Phys-chem Descriptors")
-            #Compute some common 2D phys-chem descriptors
-            descriptors = {
-                "Molecular Weight": Descriptors.MolWt,
-                "cLogP": Descriptors.MolLogP,
-                "Number of H-bond Donors": Descriptors.NumHDonors,
-                "Number of H-bond Acceptors": Descriptors.NumHAcceptors,
-                "Topological Polar Surface Area (TPSA)": Descriptors.TPSA,
-                "QED": Chem.QED.qed,
-                "Number of Rotatable Bonds": Descriptors.NumRotatableBonds,
-                "Number of Aromatic Rings": Descriptors.NumAromaticRings,
-                "Number of Aliphatic Rings": Descriptors.NumAliphaticRings,
-                "Number of Rings": Descriptors.RingCount,
-                "Fraction of Csp3 Carbons": Descriptors.FractionCSP3,
-                "SA Score": sascorer.calculateScore
-            }
-            # Create a DataFrame to display the descriptors
-            desc_df = pd.DataFrame({desc_name: func(mol) for desc_name, func in descriptors.items()}, index=[0])
-            #rename column to Descriptor and Value
-            desc_df_T=desc_df.T
-            desc_df_T.columns = ['Value'] #rename column to Value
 
-            st.dataframe(desc_df_T, use_container_width=True)
+            #Display image and table side-by-side
+            col1, col2 = st.columns([1, 1])
+            with col1:
+                st.subheader("2D Structure")
+                img = Draw.MolToImage(mol, size=(400, 480))
+                st.image(img, caption="2D structure of the input SMILES", use_container_width=False)
+            with col2:
+                #st.table(desc_df_T)
+
+                st.subheader("Calculate Descriptors")
+                #Compute some common 2D phys-chem descriptors
+                descriptors = {
+                    "Molecular Weight": Descriptors.MolWt,
+                    "cLogP": Descriptors.MolLogP,
+                    "Number of H-bond Donors": Descriptors.NumHDonors,
+                    "Number of H-bond Acceptors": Descriptors.NumHAcceptors,
+                    "Topological Polar Surface Area (TPSA)": Descriptors.TPSA,
+                    "QED": Chem.QED.qed,
+                    "Number of Rotatable Bonds": Descriptors.NumRotatableBonds,
+                    "Number of Aromatic Rings": Descriptors.NumAromaticRings,
+                    "Number of Aliphatic Rings": Descriptors.NumAliphaticRings,
+                    "Number of Rings": Descriptors.RingCount,
+                    "Fraction of Csp3 Carbons": Descriptors.FractionCSP3,
+                    "SA Score": sascorer.calculateScore
+                }
+                # Create a DataFrame to display the descriptors
+                desc_df = pd.DataFrame({desc_name: func(mol) for desc_name, func in descriptors.items()}, index=[0])
+                #rename column to Descriptor and Value
+                desc_df_T=desc_df.T
+                desc_df_T.columns = ['Value'] #rename column to Value
+
+                #st.dataframe(desc_df_T, use_container_width=True)
+                st.table(desc_df_T)
 
             st.subheader("Check for Alerts")
             # initialize filter
