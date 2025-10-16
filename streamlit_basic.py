@@ -33,8 +33,23 @@ st.html("""
     </style>
     """
 )
-#Put a temporary slider
-st.sidebar.title("Menu")
+############################################################################
+#
+# Define SideBar Menu for different pages
+#
+############################################################################
+
+freedom = st.Page("virtual_screening/search_freedomspace.py", title="Search Ultra-Large Library", icon=":material/dashboard:")
+esp = st.Page("virtual_screening/esp_similarity.py", title="ESP Similarity", icon=":material/bubble_chart:")
+fp = st.Page("virtual_screening/fingerprint_similarity.py", title="Fingerprint Similarity", icon=":material/grid_on:")
+
+quick = st.Page("QSAR_modelling/quick_QSAR.py", title="Quick QSAR", icon=":material/bug_report:")
+
+pg = st.navigation(
+    {
+        "Virtual Screening":[freedom, esp, fp],
+        "QSAR Modelling":[quick]
+    })
 
 ############################################################################
 #
@@ -630,19 +645,17 @@ if selected == "Identifying Scaffolds":
         st.subheader("Examine molecules with a given scaffold")
         scaffold_id = st.selectbox("Select a scaffold index", options=scaffold_df.index.tolist())
         scaffold_smi = scaffold_df.Murcko_Scaffold.values[scaffold_id]
-
         tmp_df = df.query("Murcko_Scaffold == @scaffold_smi").copy() #put molecules with the scaffold in a new dataframe
-        tmp_df['mol'] = tmp_df[smiles_col].apply(Chem.MolFromSmiles) 
+        tmp_df['mol'] = tmp_df[smiles_col].apply(Chem.MolFromSmiles)
         scaffold_mol = scaffold_df.mol.values[scaffold_id] #get mol object for the scaffold into scaffold_mol
         AllChem.Compute2DCoords(scaffold_mol)
-        [AllChem.GenerateDepictionMatching2DStructure(m,scaffold_mol) for m in tmp_df.mol]
+        #[AllChem.GenerateDepictionMatching2DStructure(m,scaffold_mol) for m in tmp_df.mol]
+        #st.write("hello")
 
         #concatenate legends
         legend_ = st.selectbox("Select legend", options=[col for col in tmp_df.columns if col != 'mol'], index=0)
         tmp_df['legend'] = tmp_df[legend_].astype(str)
-        #tmp_df['legend'] = tmp_df['GV'] + ' | ' + tmp_df['ROCK2_log'].astype(str)
-
-        #sort tmp_df as per ROCK2_log in descending order
+        #sort tmp_df as per descending order
         tmp_df_sort = tmp_df.sort_values(activity_col, ascending=False)
         #Draw molecules sorted as per ROCK2_log
 
@@ -669,17 +682,14 @@ if selected == "SMILES Analysis":
     if smiles_input:
         mol = Chem.MolFromSmiles(smiles_input)
         if mol:
-            
-
             #Display image and table side-by-side
             col1, col2 = st.columns([1, 1])
             with col1:
                 st.subheader("2D Structure")
-                img = Draw.MolToImage(mol, size=(400, 480))
+                #make the image sharper
+                img = Draw.MolToImage(mol, size=(450, 480), kekulize=True)
                 st.image(img, caption="2D structure of the input SMILES", use_container_width=False)
             with col2:
-                #st.table(desc_df_T)
-
                 st.subheader("Calculate Descriptors")
                 #Compute some common 2D phys-chem descriptors
                 descriptors = {
