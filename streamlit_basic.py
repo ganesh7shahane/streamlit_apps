@@ -1,16 +1,24 @@
+from pyparsing import itemgetter
+import rdkit
 import streamlit as st
 import pandas as pd
 import numpy as np
 import seaborn as sns
+import plotly.express as px
 from rdkit import Chem
 from rdkit.Chem import Draw
 from rdkit.Chem.Draw import rdDepictor, rdMolDraw2D
 from rdkit.Chem import Descriptors
 from rdkit.Chem.FilterCatalog import *
 from rdkit.Chem import FilterCatalog
+from rdkit.Chem import rdMMPA, Draw
+import useful_rdkit_utils as uru
+from tqdm.auto import tqdm
+from itertools import chain
 import matplotlib.pyplot as plt
 from streamlit_option_menu import option_menu
 from rdkit.Chem import AllChem
+from scaffold_finder import FragmentMol
 from rdkit.Chem.rdDepictor import Compute2DCoords
 import mols2grid
 import io
@@ -53,14 +61,14 @@ pg = st.navigation(
 
 ############################################################################
 #
-#   Define sidebar menu
+#   Define option menu
 #
 ############################################################################
 
 selected = option_menu(
     menu_title="Structure-Activity Relationship (SAR) Analysis Tools",
     menu_icon="bar-chart-fill",
-    options=["DataFrame Viz", "Identifying Scaffolds", "SMILES Analysis", "MMP Analysis"],
+    options=["DataFrame Viz", "Identifying Scaffolds", "SMILES Analysis", "R-group Analysis"],
     icons=["0-square", "1-square", "2-square", "3-square"],
     default_index=0,
     orientation="horizontal"
@@ -134,8 +142,18 @@ if selected == "DataFrame Viz":
 
                 st.write("\n")
                 st.subheader("Histograms of Selected Columns")
-                st.markdown("First, let's look at the histograms of all numerical columns.")
-                                
+                
+                #Allow user to select columns through expander that lists all columns with checkboxes
+                with st.expander("Show and select columns"):
+                    for col in numeric_cols:
+                        st.checkbox(col, value=True, key=col)
+
+                #Get the selected columns
+                selected_cols = [col for col in numeric_cols if st.session_state[col]]
+                
+                #The dataframe will be filtered to only selected columns
+                df_selected = df[selected_cols]
+                                                
                 #Give user options to change the default values
                 st.info("You can change the default values of number of bins, color and figure size below.") 
                 
@@ -148,7 +166,7 @@ if selected == "DataFrame Viz":
                 with col3:
                     default_size = st.slider("Figure size (width, height)", min_value=5, max_value=25, value=(14, 15), step=1)
 
-                fig = df.hist(
+                fig = df_selected.hist(
                     bins=default_bins,
                     color=default_color,
                     edgecolor='black',
@@ -162,7 +180,10 @@ if selected == "DataFrame Viz":
 
                 st.pyplot(plt.gcf())    # Show the whole figure in Streamlit
 
-            st.subheader("**Draw a single histogram or bar plot**")
+            #Put up a divider
+            st.markdown("---")
+            
+            st.subheader("**Draw a single column histogram or bar plot**")
             #select whether to draw a histogram or barplot
             plot_type = st.selectbox("Select plot type", options=["Histogram", "Bar Plot"])
             selected_column = st.selectbox("Select a column", options=numeric_cols)
@@ -192,11 +213,11 @@ if selected == "DataFrame Viz":
 
                 # Let user select which column to plot
                 numeric_cols = df.select_dtypes(include=np.number).columns.tolist()
-                #selected_col = st.selectbox("Select a column to plot:", numeric_cols)
 
                 # Automatically suggest bin width
                 col_min, col_max = df[selected_column].min(), df[selected_column].max()
                 default_bin_width = (col_max - col_min) / 10  # default ~10 bins
+                
 
                 col1_2, col2_2, col3_2 = st.columns(3)
                 with col1_2:
@@ -208,12 +229,9 @@ if selected == "DataFrame Viz":
 
                 if bin_mode == "Custom":
                     bin_width = st.number_input("Enter bin width:", min_value=0.1, value=float(default_bin_width))
-                    #also put custom ranges separated by comma
-                    #custom_bins = st.text_input("Enter custom bin ranges (comma-separated):", value="")
+                   
                 else:
                     bin_width = default_bin_width
-
-                # Create bins
                 bins = np.arange(col_min, col_max + bin_width, bin_width)
                 df["binned"] = pd.cut(df[selected_column], bins=bins, include_lowest=True)
 
@@ -230,9 +248,11 @@ if selected == "DataFrame Viz":
                 ax.set_ylabel("Count")
                 ax.set_title(f"Distribution of {selected_column}")
                 plt.xticks(rotation=45, ha="right")
-
                 st.pyplot(fig)
 
+            ##put up a divider
+            st.markdown("---")
+            
             st.subheader("Correlation Heatmap")
             st.markdown("A correlation heatmap helps to visualize the correlation coefficients between multiple numerical columns in a dataset. It provides insights into how different variables relate to each other, which can be useful for feature selection and understanding relationships in the data.")
             if len(numeric_cols) > 1:
@@ -244,22 +264,37 @@ if selected == "DataFrame Viz":
             else:
                 st.error("Not enough numerical columns to compute correlation heatmap.")
                 
-            st.subheader("Regression Plot")
+            ##put up a divider
+            st.markdown("---")
+            
+            st.subheader("Interactive Regression Plot")
             if len(numeric_cols) >= 2:
                 col1 = st.selectbox("Select X-axis column", options=numeric_cols, index=0)
                 col2 = st.selectbox("Select Y-axis column", options=numeric_cols, index=1)
-                if col1 and col2:
-                    fig, ax = plt.subplots(figsize=(8, 6), dpi=300)
-                    sns.regplot(x=df[col1], y=df[col2], ax=ax, scatter_kws={'s': 10}, line_kws={'color': 'red'})
-                    ax.set_title(f"Regression Plot: {col1} vs {col2}")
-                    #Also put correlation coefficient in the title
+                if col1 and col2:                    
+                    #Use plotly to make an interactive regression plot. When hovering over a point, show the 2D structure and index of the molecule
+                    #colour slider
+                    color_col = st.selectbox("Select color column", options=numeric_cols, index=2)
+                    fig = px.scatter(df, x=col1, y=col2, hover_data=[df.index,smiles_col], size_max=50, color=color_col)
+                    #add regression line and correlation coefficient to the title
                     corr_coef = df[[col1, col2]].corr().iloc[0, 1]
-                    ax.set_title(f"Regression Plot: {col1} vs {col2} (Correlation Coefficient: {corr_coef:.2f})")
-                    ax.set_xlabel(col1)
-                    ax.set_ylabel(col2)
-                    st.pyplot(fig)
+                    fig.add_traces(px.scatter(df, x=col1, y=col2, trendline="ols").data[1])
+                    fig.update_layout(title=f"{col1} vs {col2} (Correlation Coefficient: {corr_coef:.2f})", title_font_size=20)
+                    st.plotly_chart(fig)
             else:
                 st.error("Not enough numerical columns to plot regression.")
+                
+            if len(numeric_cols)>=3:
+                st.subheader("Interactive 3D Scatter Plot")
+                col_x = st.selectbox("Select X-axis column", options=numeric_cols, index=0, key="x_axis")
+                col_y = st.selectbox("Select Y-axis column", options=numeric_cols, index=1, key="y_axis")
+                col_z = st.selectbox("Select Z-axis column", options=numeric_cols, index=2, key="z_axis")
+                if col_x and col_y and col_z:
+                    fig_3d = px.scatter_3d(df, x=col_x, y=col_y, z=col_z, hover_data=[df.index,smiles_col], size_max=50)
+                    fig_3d.update_layout(title=f"3D Scatter Plot: {col_x} vs {col_y} vs {col_z}", title_font_size=20)
+                    st.plotly_chart(fig_3d)
+            else:
+                st.error("Not enough numerical columns to plot 3D scatter plot.")
 
         ############################################################################
         #
@@ -270,9 +305,20 @@ if selected == "DataFrame Viz":
         # Double-ended sliders for each numerical column
         st.subheader("Visualise 2D structures of molecules")
         st.write(f"Currently, there are {len(df)} molecules in the dataset.")
+        
+        @st.cache_data
+        def smi_to_png(smi: str) -> str:
+            """Returns molecular image as data URI."""
+            mol = rdkit.Chem.MolFromSmiles(smi)
+            pil_image = rdkit.Chem.Draw.MolToImage(mol)
+
+            with io.BytesIO() as buffer:
+                pil_image.save(buffer, "png")
+                data = base64.encodebytes(buffer.getvalue()).decode("utf-8")
+
+            return f"data:image/png;base64,{data}"
 
         df_smiles = df[smiles_col]
-
         ok_smiles = []
         delete_smiles = []
         i=0
@@ -463,19 +509,21 @@ if selected == "DataFrame Viz":
 if selected == "Identifying Scaffolds":
     st.title("Identifying Scaffolds from a chemical series")    
     
-    st.markdown('''
-    In Cheminformatics, we frequently run into cases where we want to understand structure-activity relationships in a set of molecules. In order to do this, we typically separate the molecules based on common scaffolds, then create an R-group table to explore the substituents that have been attached to the scaffold. 
-    In addition, identifying scaffolds allows us to perform tasks like aligning molecules that will enable us to more easily compare the molecules. In this notebook we'll use a method inspired by a 2019 paper by [Naveja, Vogt, Stumpfe, Medina-Franco, and Bajorath](https://pubs.acs.org/doi/full/10.1021/acsomega.8b03390). The method operates by carrying out three steps.
-    
-    :red[**Step 1**:]
-    Decompose each molecule into a set of fragments. In this case we'll use the [FragmentMol](https://www.rdkit.org/docs/source/rdkit.Chem.rdMMPA.html) function from the Matched Molecular Pair Analysis (MMPA) functions in the RDKit decompose a molecule into a set of fragments. The RDKit MMPA methods use the Hussain and Rea methodology, which fragments a molecule by successively disconnecting acyclic single bonds.
+    st.markdown("Identifying bioactive molecular (BM) scaffolds—the core structural frameworks that recur among active compounds in structure–activity relationship (SAR) datasets—is a critical step in modern drug discovery because it helps link chemistry to biological function systematically.")
 
-    :red[**Step 2**:]
-    Remove any fragments where the number of atoms is less than 2/3 the number of atoms in the original molecule.
+    st.markdown("- BM scaffolds identify the chemical “core” responsible for a compound’s biological activity, enabling chemists to understand which parts of the structure can be modified without losing potency.")
 
-    :red[**Step 3**:]
-    Collect fragments and records their frequency. We can do this easily using the Pandas groupby method.
-    ''')
+    st.markdown("- Once scaffolds associated with high activity are known, chemists can perform scaffold decoration and substituent optimization more effectively to improve pharmacological properties such as potency, selectivity, and solubility.")
+
+    st.markdown("- Recognizing key scaffolds allows researchers to explore novel chemotypes via scaffold hopping—designing structurally distinct molecules that retain activity—thus improving intellectual property diversity and discovering new drugs for existing targets.") 
+
+    st.markdown("- Scaffold analysis reveals gaps and redundancies within screening libraries, ensuring broad coverage of molecular diversity and guiding the design of diverse and efficient compound collections.")
+
+    st.markdown("- When scaffolds are annotated by bioactivity, they serve as meaningful units for classification in quantitative SAR models, allowing better correlation between molecular features and biological outcomes.")
+
+    st.markdown("- Privileged scaffolds—frameworks capable of interacting with multiple receptor types—can be recognized through BM scaffold identification, accelerating discovery of versatile, bioactive chemotypes.")
+
+    st.markdown("- Focusing on validated scaffolds helps filter large SAR datasets, reducing noise and simplifying candidate selection processes, which improves hit-to-lead progression speed.")
     from rdkit.Chem.Scaffolds import MurckoScaffold
     import useful_rdkit_utils as uru
     
@@ -690,7 +738,7 @@ if selected == "SMILES Analysis":
                 img = Draw.MolToImage(mol, size=(450, 480), kekulize=True)
                 st.image(img, caption="2D structure of the input SMILES", use_container_width=False)
             with col2:
-                st.subheader("Calculate Descriptors")
+                st.subheader("Properties")
                 #Compute some common 2D phys-chem descriptors
                 descriptors = {
                     "Molecular Weight": Descriptors.MolWt,
@@ -715,15 +763,74 @@ if selected == "SMILES Analysis":
                 #st.dataframe(desc_df_T, use_container_width=True)
                 st.table(desc_df_T)
 
-            st.subheader("Check for Alerts")
-            # initialize filter
-            params = FilterCatalogParams()
-            params.AddCatalog(FilterCatalogParams.FilterCatalogs.PAINS)
-            catalog = FilterCatalog(params)
+            # st.subheader("Check for Alerts")
+            # # initialize filter
+            # params = FilterCatalogParams()
+            # params.AddCatalog(FilterCatalogParams.FilterCatalogs.PAINS)
+            # catalog = FilterCatalog(params)
             
 
 #############################################################################
-#   Matched Molecular Pair Analysis
+#   R-group Analysis
 #############################################################################
-if selected == "Matched Molecular Pair Analysis":
-    st.title("Matched Molecular Pair Analysis (MMPA) of a chemical series")
+if selected == "R-group Analysis":
+    st.title("🔬 R-group Analysis")
+    st.markdown("R-group analysis is a powerful technique in medicinal chemistry that involves breaking down molecules into their core scaffolds and substituents (R-groups) to understand structure-activity relationships (SAR). This tool allows you to upload a dataset of molecules, decompose them into scaffolds and R-groups, and visualize the results.")
+    st.subheader("Upload the CSV file")
+    uploaded_file = st.file_uploader("", type=["csv"])
+    
+    if uploaded_file is not None:
+        # Read the uploaded CSV into a pandas DataFrame
+        df = pd.read_csv(uploaded_file)
+        # Display the top 5 rows
+        st.subheader("Let's see how the dataset looks like")
+        rows = st.slider("Choose rows to display",1,len(df))
+        
+        st.dataframe(df.head(rows), use_container_width=True)
+        # Show the total number of rows
+        st.info(f"It appears there are {df.shape[0]} molecules in the dataset.")
+        # Find the SMILES column (case-insensitive)
+        smiles_col = None
+        for col in df.columns:
+            if col.lower() == "smiles":
+                smiles_col = col
+                break
+        if smiles_col:
+            st.write(f"Identified SMILES column: {smiles_col}")
+        else:
+            st.error("No SMILES column found (case-insensitive). Some functionalities will be limited.")
+            
+        # #Define some useful functions
+        # def remove_map_nums(mol):
+        #     """
+        #     Remove atom map numbers from a molecule
+        #     """
+        #     for atm in mol.GetAtoms():
+        #         atm.SetAtomMapNum(0)
+
+        # def sort_fragments(mol):
+        #     """
+        #     Transform a molecule with multiple fragments into a list of molecules that is sorted by number of atoms
+        #     from largest to smallest
+        #     """
+        #     frag_list = list(Chem.GetMolFrags(mol, asMols=True))
+        #     [remove_map_nums(x) for x in frag_list]
+        #     frag_num_atoms_list = [(x.GetNumAtoms(), x) for x in frag_list]
+        #     frag_num_atoms_list.sort(key=itemgetter(0), reverse=True)
+        #     return [x[1] for x in frag_num_atoms_list]
+        
+        # df['mol_'] = df.SMILES.apply(Chem.MolFromSmiles)
+
+        # df.mol_ = df.mol_.apply(uru.get_largest_fragment)
+
+        # #Decompose Molecules to Scaffolds and Sidechains
+        # row_list = []
+        # for smiles, name, pIC50, mol_ in df.values:
+        #     frag_list = FragmentMol(mol_,maxCuts=1)
+        #     #st.write("Before_2")
+        #     for _,frag_mol in frag_list:
+        #         pair_list = sort_fragments(frag_mol)
+        #         tmp_list = [smiles]+[Chem.MolToSmiles(x) for x in pair_list]+[name, pIC50]
+        #         row_list.append(tmp_list)
+        # row_df = pd.DataFrame(row_list,columns=["SMILES","Core","R_group","Name","pIC50"])
+        # st.dataframe(row_df.head(10))
