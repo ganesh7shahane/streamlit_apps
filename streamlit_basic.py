@@ -73,10 +73,13 @@ selected = option_menu(
     default_index=0,
     orientation="horizontal"
 )
+
+# Load default CSV file (local or URL)
+default_file_path = 'https://raw.githubusercontent.com/ganesh7shahane/useful_cheminformatics/refs/heads/main/data/FINE_TUNING_pi3k-mtor_objectives.csv'  # adjust path or use URL
+default_df = pd.read_csv(default_file_path)
+
 if selected == "DataFrame Viz":
     st.title("Molecule DataFrame Visualisation")
-
-    #st.header("Molecule DataFrame Analysis and Visualisation", divider='rainbow')
 
     st.markdown("Sometimes we have a CSV file containing SMILES and their properties, and we just wish to visualise it and analyse some of its properties. This web app is precisely for that.")
     st.markdown("Specifically, this page let's you:")
@@ -98,409 +101,413 @@ if selected == "DataFrame Viz":
     if uploaded_file is not None:
         # Read the uploaded CSV into a pandas DataFrame
         df = pd.read_csv(uploaded_file)
+        st.success(f"Analyzing uploaded file: {uploaded_file.name}")
+    else:
+        df = default_df
+        st.info("Using default CSV file for sample SAR analysis")
         
-        # Display the top 5 rows
-        st.subheader("Let's see how the dataset looks like")
-        rows = st.slider("Choose rows to display",1,len(df))
-        st.dataframe(df.head(rows), use_container_width=True)
+    # Display the top 5 rows
+    st.subheader("Let's see how the dataset looks like")
+    rows = st.slider("Choose rows to display",1,len(df))
+    st.dataframe(df.head(rows), use_container_width=True)
+    
+    # Show the total number of rows
+    st.info(f"It appears there are {df.shape[0]} molecules in the dataset.")
+    
+    # Find the SMILES column (case-insensitive)
+    smiles_col = None
+    for col in df.columns:
+        if col.lower() == "smiles":
+            smiles_col = col
+            break
+    if smiles_col:
+        st.write(f"Identified SMILES column: {smiles_col}")
+    else:
+        st.error("No SMILES column found (case-insensitive). Some functionalities will be limited.")
         
-        # Show the total number of rows
-        st.info(f"It appears there are {df.shape[0]} molecules in the dataset.")
-        
-        # Find the SMILES column (case-insensitive)
-        smiles_col = None
-        for col in df.columns:
-            if col.lower() == "smiles":
-                smiles_col = col
-                break
-        if smiles_col:
-            st.write(f"Identified SMILES column: {smiles_col}")
-        else:
-            st.error("No SMILES column found (case-insensitive). Some functionalities will be limited.")
+    ############################################################################
+    #
+    #   Statistics and Histograms
+    #
+    ############################################################################
+    
+    st.subheader("Check for NaN in all columns")
+    #check Nan in all columns and rename the count column to 'NaN count'
+    nan_counts = df.isna().sum().reset_index()
+    nan_counts.columns = ['Column', 'NaN Count']
+    st.dataframe(nan_counts)
+    #st.write(df.isna().sum())
             
-        ############################################################################
-        #
-        #   Statistics and Histograms
-        #
-        ############################################################################
-        
-        st.subheader("Check for NaN in all columns")
-        #check Nan in all columns and rename the count column to 'NaN count'
-        nan_counts = df.isna().sum().reset_index()
-        nan_counts.columns = ['Column', 'NaN Count']
-        st.dataframe(nan_counts)
-        #st.write(df.isna().sum())
-                
-        numeric_cols = df.select_dtypes(include="number").columns.tolist()
-        selected_cols = []
-                
-        if len(numeric_cols) > 0:
-            if len(numeric_cols) > 1:
-                st.subheader("Compute some column statistics")
-                st.write("**count, min, max, etc:**")
-                st.dataframe(df[numeric_cols].describe())
-
-                st.write("\n")
-                st.subheader("Histograms of Selected Columns")
-                
-                #Allow user to select columns through expander that lists all columns with checkboxes
-                with st.expander("Show and select columns"):
-                    for col in numeric_cols:
-                        st.checkbox(col, value=True, key=col)
-
-                #Get the selected columns
-                selected_cols = [col for col in numeric_cols if st.session_state[col]]
-                
-                #The dataframe will be filtered to only selected columns
-                df_selected = df[selected_cols]
-                                                
-                #Give user options to change the default values
-                st.info("You can change the default values of number of bins, color and figure size below.") 
-                
-                #shift the slider to the left column
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    default_bins = st.slider("Number of bins", min_value=2, max_value=100, value=30, step=5)
-                with col2:
-                    default_color = st.color_picker("Pick a color for the histogram", value='#EE82EE')
-                with col3:
-                    default_size = st.slider("Figure size (width, height)", min_value=5, max_value=25, value=(14, 15), step=1)
-
-                fig = df_selected.hist(
-                    bins=default_bins,
-                    color=default_color,
-                    edgecolor='black',
-                    layout=(len(numeric_cols) // 2 + 1, 3),
-                    figsize=default_size,
-                    grid=True
-                )
-
-                plt.tight_layout()      # Prevents overlapping text
-                plt.gcf().set_dpi(300) # Set DPI for high resolution
-
-                st.pyplot(plt.gcf())    # Show the whole figure in Streamlit
-
-            #Put up a divider
-            st.markdown("---")
+    numeric_cols = df.select_dtypes(include="number").columns.tolist()
+    selected_cols = []
             
-            st.subheader("**Draw a single column histogram or bar plot**")
-            #select whether to draw a histogram or barplot
-            plot_type = st.selectbox("Select plot type", options=["Histogram", "Bar Plot"])
-            selected_column = st.selectbox("Select a column", options=numeric_cols)
+    if len(numeric_cols) > 0:
+        if len(numeric_cols) > 1:
+            st.subheader("Compute some column statistics")
+            st.write("**count, min, max, etc:**")
+            st.dataframe(df[numeric_cols].describe())
 
-            # Only one column should be selected; if more are selected, take the last
-            if plot_type == "Histogram" and selected_column:
-                st.write(f"{plot_type} for: {selected_column}")
-
-                # Prepare histogram
-                col1_1, col2_1, col3_1 = st.columns(3)
-                with col1_1:
-                    default_bins_1 = st.slider("Bins", min_value=2, max_value=100, value=15, step=2)
-                with col2_1:
-                    default_color_1 = st.color_picker("Pick a color", value="#82EEDE")
-                with col3_1:
-                    default_size_1 = st.slider("Figure size - (width, height)", min_value=5, max_value=25, value=(6, 7), step=1)
-
-                fig, ax = plt.subplots(figsize=default_size_1, dpi=200)  # High resolution
-                df[selected_column].hist(ax=ax, bins=default_bins_1, color=default_color_1, edgecolor="black")
-                ax.set_title(f"Histogram of {selected_column}")
-                ax.set_xlabel(selected_column)
-                ax.set_ylabel("Frequency")
-                st.pyplot(fig)
+            st.write("\n")
+            st.subheader("Histograms of Selected Columns")
             
-            elif plot_type == "Bar Plot" and selected_column:
-                st.write(f"{plot_type} for: {selected_column}")
+            #Allow user to select columns through expander that lists all columns with checkboxes
+            with st.expander("Show and select columns"):
+                for col in numeric_cols:
+                    st.checkbox(col, value=True, key=col)
 
-                # Let user select which column to plot
-                numeric_cols = df.select_dtypes(include=np.number).columns.tolist()
-
-                # Automatically suggest bin width
-                col_min, col_max = df[selected_column].min(), df[selected_column].max()
-                default_bin_width = (col_max - col_min) / 10  # default ~10 bins
-                
-
-                col1_2, col2_2, col3_2 = st.columns(3)
-                with col1_2:
-                    st.write(f"**Value range:** {col_min:.2f} to {col_max:.2f}")
-                with col2_2:
-                    bin_mode = st.radio("How do you want to define bins?", ["Auto", "Custom"], horizontal=True)
-                with col3_2:
-                    default_color_2 = st.color_picker("Pick a color", value="#125AF7")
-
-                if bin_mode == "Custom":
-                    bin_width = st.number_input("Enter bin width:", min_value=0.1, value=float(default_bin_width))
-                   
-                else:
-                    bin_width = default_bin_width
-                bins = np.arange(col_min, col_max + bin_width, bin_width)
-                df["binned"] = pd.cut(df[selected_column], bins=bins, include_lowest=True)
-
-                # Count frequency per bin
-                bin_counts = df["binned"].value_counts().sort_index()
-
-                # Plot bar chart
-                fig, ax = plt.subplots(figsize=(8, 5), dpi=300)
-                ax.bar(bin_counts.index.astype(str), bin_counts.values, color=default_color_2, edgecolor="black")
-                #plot count on top of each bar
-                for i, v in enumerate(bin_counts.values):
-                    ax.text(i, v + 0.5, str(v), ha='center', va='bottom', fontsize=8)
-                ax.set_xlabel(selected_column)
-                ax.set_ylabel("Count")
-                ax.set_title(f"Distribution of {selected_column}")
-                plt.xticks(rotation=45, ha="right")
-                st.pyplot(fig)
-
-            ##put up a divider
-            st.markdown("---")
+            #Get the selected columns
+            selected_cols = [col for col in numeric_cols if st.session_state[col]]
             
-            st.subheader("Correlation Heatmap")
-            st.markdown("A correlation heatmap helps to visualize the correlation coefficients between multiple numerical columns in a dataset. It provides insights into how different variables relate to each other, which can be useful for feature selection and understanding relationships in the data.")
-            if len(numeric_cols) > 1:
-                corr = df[numeric_cols].corr()
-                fig, ax = plt.subplots(figsize=(10, 8), dpi=300)
-                sns.heatmap(corr, annot=True, fmt=".1f", cmap="coolwarm", ax=ax)
-                ax.set_title("Correlation Heatmap")
-                st.pyplot(fig)
-            else:
-                st.error("Not enough numerical columns to compute correlation heatmap.")
-                
-            ##put up a divider
-            st.markdown("---")
+            #The dataframe will be filtered to only selected columns
+            df_selected = df[selected_cols]
+                                            
+            #Give user options to change the default values
+            st.info("You can change the default values of number of bins, color and figure size below.") 
             
-            st.subheader("Interactive Regression Plot")
-            if len(numeric_cols) >= 2:
-                col1 = st.selectbox("Select X-axis column", options=numeric_cols, index=0)
-                col2 = st.selectbox("Select Y-axis column", options=numeric_cols, index=1)
-                if col1 and col2:                    
-                    #Use plotly to make an interactive regression plot. When hovering over a point, show the 2D structure and index of the molecule
-                    #colour slider
-                    color_col = st.selectbox("Select color column", options=numeric_cols, index=2)
-                    fig = px.scatter(df, x=col1, y=col2, hover_data=[df.index,smiles_col], size_max=50, color=color_col)
-                    #add regression line and correlation coefficient to the title
-                    corr_coef = df[[col1, col2]].corr().iloc[0, 1]
-                    fig.add_traces(px.scatter(df, x=col1, y=col2, trendline="ols").data[1])
-                    fig.update_layout(title=f"{col1} vs {col2} (Correlation Coefficient: {corr_coef:.2f})", title_font_size=20)
-                    st.plotly_chart(fig)
-            else:
-                st.error("Not enough numerical columns to plot regression.")
-                
-            if len(numeric_cols)>=3:
-                st.subheader("Interactive 3D Scatter Plot")
-                col_x = st.selectbox("Select X-axis column", options=numeric_cols, index=0, key="x_axis")
-                col_y = st.selectbox("Select Y-axis column", options=numeric_cols, index=1, key="y_axis")
-                col_z = st.selectbox("Select Z-axis column", options=numeric_cols, index=2, key="z_axis")
-                if col_x and col_y and col_z:
-                    fig_3d = px.scatter_3d(df, x=col_x, y=col_y, z=col_z, hover_data=[df.index,smiles_col], size_max=50)
-                    fig_3d.update_layout(title=f"3D Scatter Plot: {col_x} vs {col_y} vs {col_z}", title_font_size=20)
-                    st.plotly_chart(fig_3d)
-            else:
-                st.error("Not enough numerical columns to plot 3D scatter plot.")
+            #shift the slider to the left column
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                default_bins = st.slider("Number of bins", min_value=2, max_value=100, value=30, step=5)
+            with col2:
+                default_color = st.color_picker("Pick a color for the histogram", value='#EE82EE')
+            with col3:
+                default_size = st.slider("Figure size (width, height)", min_value=5, max_value=25, value=(14, 15), step=1)
 
-        ############################################################################
-        #
-        #   2D Visualisation
-        #
-        ############################################################################
-        
-        # Double-ended sliders for each numerical column
-        st.subheader("Visualise 2D structures of molecules")
-        st.write(f"Currently, there are {len(df)} molecules in the dataset.")
-        
-        @st.cache_data
-        def smi_to_png(smi: str) -> str:
-            """Returns molecular image as data URI."""
-            mol = rdkit.Chem.MolFromSmiles(smi)
-            pil_image = rdkit.Chem.Draw.MolToImage(mol)
-
-            with io.BytesIO() as buffer:
-                pil_image.save(buffer, "png")
-                data = base64.encodebytes(buffer.getvalue()).decode("utf-8")
-
-            return f"data:image/png;base64,{data}"
-
-        df_smiles = df[smiles_col]
-        ok_smiles = []
-        delete_smiles = []
-        i=0
-        
-        ####################################################################################
-        #
-        #   Check if all SMILES can be read by RDKit
-        ####################################################################################
-
-        st.write("Checking if all SMILES strings can be read by RDKit...")
-        for ds in df_smiles:
-            try:
-                cs = Chem.CanonSmiles(ds)
-                ok_smiles.append(cs)
-                i=i+1
-            except:
-                print('Invalid SMILES:', ds)
-                delete_smiles.append(ds)
-        
-        if len(delete_smiles) == 0:
-            st.success("All SMILES strings are valid and can be read by RDKit.")
-        else:   
-            st.error(f"There are {len(delete_smiles)} invalid SMILES strings that RDKit cannot read.")
-            st.write(f"These invalid SMILES strings are:")
-            st.write(delete_smiles)
-            st.write("Removing these invalid SMILES strings from the dataset and proceeding...")
-            df = df[~df[smiles_col].isin(delete_smiles)].reset_index(drop=True)
-        
-        ####################################################################################
-        #
-        #   Filter the dataframe based on the sliders
-        #
-        ####################################################################################
-        if len(numeric_cols) > 0:
-            st.write("To visualise 2D structures of all molecules, leave the sliders at their default values.")
-            filters = {}
-            # Create two columns for layout
-            col1, col2 = st.columns(2, gap="large")
-            for idx, col in enumerate(numeric_cols):
-                with col1 if idx % 2 == 0 else col2:
-                    min_val = float(df[col].min())
-                    max_val = float(df[col].max())
-                    filters[col] = st.slider(
-                    f"{col} range",
-                    min_value=float(min_val),
-                    max_value=float(max_val),
-                    value=(float(min_val), float(max_val))
+            fig = df_selected.hist(
+                bins=default_bins,
+                color=default_color,
+                edgecolor='black',
+                layout=(len(numeric_cols) // 2 + 1, 3),
+                figsize=default_size,
+                grid=True
             )
 
-            filtered_df = df.copy()
-            for col, (min_val, max_val) in filters.items():
-                new_df = filtered_df[(filtered_df[col] >= min_val) & (filtered_df[col] <= max_val)]
+            plt.tight_layout()      # Prevents overlapping text
+            plt.gcf().set_dpi(300) # Set DPI for high resolution
 
-            st.write(f"Remaining molecules: {len(new_df)}")
+            st.pyplot(plt.gcf())    # Show the whole figure in Streamlit
 
-            # Generate 2D structures and property legends
-            st.subheader("2D Structures of Filtered Molecules")
-            mols = []
-            legends = []
-            new_df['mol_2'] = new_df[smiles_col].apply(lambda x: Chem.MolFromSmiles(x))
-            
-            #Add options to either display top 10 or all molecules
-            display_option = st.radio("Display options:", ("All filtered molecules", "Display all molecules in the dataset (no filtering)"), index=0)
-            
-            #choose legend from dropdown, list of columns, not mol column
-            legend_option = st.selectbox("Choose legend to display:", options=[col for col in new_df.columns if col != 'mol_2'], index=0)
-
-            if display_option == "All filtered molecules":
-                display_count = len(new_df)
-                html_data = mols2grid.display(new_df.head(display_count), mol_col='mol_2', size=(200, 200), 
-                                            subset=["img",legend_option],
-                                            n_items_per_page=16, 
-                                            fixedBondLength=25, clearBackground=False,
-                                            ).data
-                st.components.v1.html(html_data, height=1100, scrolling=True)
-            
-            elif display_option == "Display all molecules in the dataset (no filtering)":
-                no_restricted_df = df.copy()
-                display_count = len(df)
-                no_restricted_df['mol_2'] = no_restricted_df[smiles_col].apply(lambda x: Chem.MolFromSmiles(x))
-                #AllChem.Compute2DCoords(no_restricted_df['mol_2'][0])
-                #[AllChem.GenerateDepictionMatching2DStructure(m,no_restricted_df['mol_2'][0]) for m in no_restricted_df['mol_2']]
-                html_data = mols2grid.display(no_restricted_df.head(display_count), mol_col='mol_2', size=(200, 200), subset=["img",legend_option],n_items_per_page=16, fixedBondLength=25, clearBackground=False).data
-                st.components.v1.html(html_data, height=1100, scrolling=True)
+        #Put up a divider
+        st.markdown("---")
         
-        elif len(numeric_cols) == 0:
-            st.info("No numerical columns found in the dataset. Cannot apply filters.")
-            if smiles_col:
-                st.write("Displaying 2D structures of all molecules in the dataset.")
-                df['mol_2'] = df[smiles_col].apply(lambda x: Chem.MolFromSmiles(x))
-                display_count = len(df)
-                html_data = mols2grid.display(df.head(display_count), mol_col='mol_2', size=(200, 200), subset=["img",legend_option], n_items_per_page=16, fixedBondLength=25, clearBackground=False).data
-                st.components.v1.html(html_data, height=1100, scrolling=True)
+        st.subheader("**Draw a single column histogram or bar plot**")
+        #select whether to draw a histogram or barplot
+        plot_type = st.selectbox("Select plot type", options=["Histogram", "Bar Plot"])
+        selected_column = st.selectbox("Select a column", options=numeric_cols)
+
+        # Only one column should be selected; if more are selected, take the last
+        if plot_type == "Histogram" and selected_column:
+            st.write(f"{plot_type} for: {selected_column}")
+
+            # Prepare histogram
+            col1_1, col2_1, col3_1 = st.columns(3)
+            with col1_1:
+                default_bins_1 = st.slider("Bins", min_value=2, max_value=100, value=15, step=2)
+            with col2_1:
+                default_color_1 = st.color_picker("Pick a color", value="#82EEDE")
+            with col3_1:
+                default_size_1 = st.slider("Figure size - (width, height)", min_value=5, max_value=25, value=(6, 7), step=1)
+
+            fig, ax = plt.subplots(figsize=default_size_1, dpi=200)  # High resolution
+            df[selected_column].hist(ax=ax, bins=default_bins_1, color=default_color_1, edgecolor="black")
+            ax.set_title(f"Histogram of {selected_column}")
+            ax.set_xlabel(selected_column)
+            ax.set_ylabel("Frequency")
+            st.pyplot(fig)
+        
+        elif plot_type == "Bar Plot" and selected_column:
+            st.write(f"{plot_type} for: {selected_column}")
+
+            # Let user select which column to plot
+            numeric_cols = df.select_dtypes(include=np.number).columns.tolist()
+
+            # Automatically suggest bin width
+            col_min, col_max = df[selected_column].min(), df[selected_column].max()
+            default_bin_width = (col_max - col_min) / 10  # default ~10 bins
+            
+
+            col1_2, col2_2, col3_2 = st.columns(3)
+            with col1_2:
+                st.write(f"**Value range:** {col_min:.2f} to {col_max:.2f}")
+            with col2_2:
+                bin_mode = st.radio("How do you want to define bins?", ["Auto", "Custom"], horizontal=True)
+            with col3_2:
+                default_color_2 = st.color_picker("Pick a color", value="#125AF7")
+
+            if bin_mode == "Custom":
+                bin_width = st.number_input("Enter bin width:", min_value=0.1, value=float(default_bin_width))
+                
             else:
-                st.error("No SMILES column found (case-insensitive). Cannot visualise 2D structures.")
-        
-        ############################################################################
-        #
-        #   Calculate descriptors
-        #
-        ############################################################################
-        
-        st.subheader("Calculate descriptors")
-        st.markdown("Here, you can prepare your dataset for training machine learning models or some other analysis.") 
-        st.info("Select one or more descriptors and click 'Calculate'.")
-        # Define descriptor options
-        basic_descs = ['MolWt', 'MolLogP', 'NumHDonors', 'NumHAcceptors']
+                bin_width = default_bin_width
+            bins = np.arange(col_min, col_max + bin_width, bin_width)
+            df["binned"] = pd.cut(df[selected_column], bins=bins, include_lowest=True)
 
-        desc_basic = st.checkbox("Basic 2D descriptors")
-        desc_all = st.checkbox("All RDKit 2D descriptors (200+)")
-        desc_fp = st.checkbox("Morgan fingerprints (radius=2, nBits=2048)")
-        calculate = st.button("Calculate")
+            # Count frequency per bin
+            bin_counts = df["binned"].value_counts().sort_index()
 
-        if calculate:
-            # Prepare molecule objects
-            mols = [Chem.MolFromSmiles(s) for s in df[smiles_col]]
-            result = pd.DataFrame({'SMILES': df[smiles_col]})
-            
-            if desc_basic:
-                for d in basic_descs:
-                    func = getattr(Descriptors, d)
-                    result[d] = [func(m) if m else None for m in mols]
-                #add rotatable bonds, TPSA and SA score
-                result['NumRotatableBonds_1'] = [Descriptors.NumRotatableBonds(m) if m else None for m in mols]
-                result['TPSA_1'] = [Descriptors.TPSA(m) if m else None for m in mols]
-                result['SAScore_1'] = [sascorer.calculateScore(m) if m else None for m in mols]
-                result['QED_1'] = [Chem.QED.qed(m) if m else None for m in mols]
-                #add suffix _1 to all the columns
-                result.rename(columns={d: d + '_1' for d in basic_descs}, inplace=True)
-            
-            if desc_all:
-                for dname, func in Descriptors._descList:
-                    result[dname] = [func(m) if m else None for m in mols]
-                #add suffix _2 to the new columns
-                result.rename(columns={dname: dname + '_2' for dname, func in Descriptors._descList}, inplace=True)
-            
-            if desc_fp:
-                nBits = 2048
-                result['MorganFP'] = [
-                    AllChem.GetMorganFingerprintAsBitVect(mol, 2, nBits).ToBitString() if mol else None
-                    for mol in mols
-                ]
-            
-            st.subheader("Calculated Results")
-            #Concatenate the original dataframe with the result dataframe
-            final_df = pd.concat([df, result.drop(columns=['SMILES'])], axis=1)
-            st.write(f"The resulting dataframe has {final_df.shape[0]} rows and {final_df.shape[1]} columns.")
-            st.dataframe(final_df, use_container_width=True)
-            df_to_download = final_df.copy()
+            # Plot bar chart
+            fig, ax = plt.subplots(figsize=(8, 5), dpi=300)
+            ax.bar(bin_counts.index.astype(str), bin_counts.values, color=default_color_2, edgecolor="black")
+            #plot count on top of each bar
+            for i, v in enumerate(bin_counts.values):
+                ax.text(i, v + 0.5, str(v), ha='center', va='bottom', fontsize=8)
+            ax.set_xlabel(selected_column)
+            ax.set_ylabel("Count")
+            ax.set_title(f"Distribution of {selected_column}")
+            plt.xticks(rotation=45, ha="right")
+            st.pyplot(fig)
+
+        ##put up a divider
+        st.markdown("---")
+        
+        st.subheader("Correlation Heatmap")
+        st.markdown("A correlation heatmap helps to visualize the correlation coefficients between multiple numerical columns in a dataset. It provides insights into how different variables relate to each other, which can be useful for feature selection and understanding relationships in the data.")
+        if len(numeric_cols) > 1:
+            corr = df[numeric_cols].corr()
+            fig, ax = plt.subplots(figsize=(10, 8), dpi=300)
+            sns.heatmap(corr, annot=True, fmt=".1f", cmap="coolwarm", ax=ax)
+            ax.set_title("Correlation Heatmap")
+            st.pyplot(fig)
         else:
-            df_to_download = df.copy()
+            st.error("Not enough numerical columns to compute correlation heatmap.")
             
-        ###########################################################################################
-        #
-        #   Download the dataframe as SDF
-        #
-        ###########################################################################################
-        st.subheader("Download the DataFrame as SDF")
-        #st.markdown("You can download the DataFrame as an SDF file, which is a common format for storing molecular structures along with their associated data.")
+        ##put up a divider
+        st.markdown("---")
         
-        #check if there is a mol column in the dataframe
-        if 'mol' not in df_to_download.columns:
-            if smiles_col:
-                df_to_download['mol'] = df_to_download[smiles_col].apply(lambda x: Chem.MolFromSmiles(x))
-            else:
-                st.error("No SMILES column found (case-insensitive). Cannot generate SDF file.")
-        # Use PandasTools to convert DataFrame to SDF
-        from rdkit.Chem import PandasTools
-        
-        #Create a button to download the SDF file
-        sdf_buffer = StringIO()
-        PandasTools.WriteSDF(df_to_download, sdf_buffer, molColName='mol', properties=list(df_to_download.columns), idName=None)
-        sdf_data = sdf_buffer.getvalue()
-        sdf_buffer.close()
-        
-        #st.info("Click the button below to download the SDF file. If descriptors were calculated, they will be included as properties in the SDF file. Otherwise, only the orginal columns will be included.")
-        st.download_button(
-            label="Download SDF",
-            data=sdf_data,
-            file_name="molecules.sdf",
-            mime="chemical/x-mdl-sdfile"
+        st.subheader("Interactive Regression Plot")
+        if len(numeric_cols) >= 2:
+            col1 = st.selectbox("Select X-axis column", options=numeric_cols, index=0)
+            col2 = st.selectbox("Select Y-axis column", options=numeric_cols, index=1)
+            if col1 and col2:                    
+                #Use plotly to make an interactive regression plot. When hovering over a point, show the 2D structure and index of the molecule
+                #colour slider
+                color_col = st.selectbox("Select color column", options=numeric_cols, index=2)
+                fig = px.scatter(df, x=col1, y=col2, hover_data=[df.index,smiles_col], size_max=50, color=color_col)
+                #add regression line and correlation coefficient to the title
+                corr_coef = df[[col1, col2]].corr().iloc[0, 1]
+                fig.add_traces(px.scatter(df, x=col1, y=col2, trendline="ols").data[1])
+                fig.update_layout(title=f"{col1} vs {col2} (Correlation Coefficient: {corr_coef:.2f})", title_font_size=20)
+                st.plotly_chart(fig)
+        else:
+            st.error("Not enough numerical columns to plot regression.")
+            
+        if len(numeric_cols)>=3:
+            st.subheader("Interactive 3D Scatter Plot")
+            col_x = st.selectbox("Select X-axis column", options=numeric_cols, index=0, key="x_axis")
+            col_y = st.selectbox("Select Y-axis column", options=numeric_cols, index=1, key="y_axis")
+            col_z = st.selectbox("Select Z-axis column", options=numeric_cols, index=2, key="z_axis")
+            if col_x and col_y and col_z:
+                fig_3d = px.scatter_3d(df, x=col_x, y=col_y, z=col_z, hover_data=[df.index,smiles_col], size_max=50)
+                fig_3d.update_layout(title=f"3D Scatter Plot: {col_x} vs {col_y} vs {col_z}", title_font_size=20)
+                st.plotly_chart(fig_3d)
+        else:
+            st.error("Not enough numerical columns to plot 3D scatter plot.")
+
+    ############################################################################
+    #
+    #   2D Visualisation
+    #
+    ############################################################################
+    
+    # Double-ended sliders for each numerical column
+    st.subheader("Visualise 2D structures of molecules")
+    st.write(f"Currently, there are {len(df)} molecules in the dataset.")
+    
+    @st.cache_data
+    def smi_to_png(smi: str) -> str:
+        """Returns molecular image as data URI."""
+        mol = rdkit.Chem.MolFromSmiles(smi)
+        pil_image = rdkit.Chem.Draw.MolToImage(mol)
+
+        with io.BytesIO() as buffer:
+            pil_image.save(buffer, "png")
+            data = base64.encodebytes(buffer.getvalue()).decode("utf-8")
+
+        return f"data:image/png;base64,{data}"
+
+    df_smiles = df[smiles_col]
+    ok_smiles = []
+    delete_smiles = []
+    i=0
+    
+    ####################################################################################
+    #
+    #   Check if all SMILES can be read by RDKit
+    ####################################################################################
+
+    st.write("Checking if all SMILES strings can be read by RDKit...")
+    for ds in df_smiles:
+        try:
+            cs = Chem.CanonSmiles(ds)
+            ok_smiles.append(cs)
+            i=i+1
+        except:
+            print('Invalid SMILES:', ds)
+            delete_smiles.append(ds)
+    
+    if len(delete_smiles) == 0:
+        st.success("All SMILES strings are valid and can be read by RDKit.")
+    else:   
+        st.error(f"There are {len(delete_smiles)} invalid SMILES strings that RDKit cannot read.")
+        st.write(f"These invalid SMILES strings are:")
+        st.write(delete_smiles)
+        st.write("Removing these invalid SMILES strings from the dataset and proceeding...")
+        df = df[~df[smiles_col].isin(delete_smiles)].reset_index(drop=True)
+    
+    ####################################################################################
+    #
+    #   Filter the dataframe based on the sliders
+    #
+    ####################################################################################
+    if len(numeric_cols) > 0:
+        st.write("To visualise 2D structures of all molecules, leave the sliders at their default values.")
+        filters = {}
+        # Create two columns for layout
+        col1, col2 = st.columns(2, gap="large")
+        for idx, col in enumerate(numeric_cols):
+            with col1 if idx % 2 == 0 else col2:
+                min_val = float(df[col].min())
+                max_val = float(df[col].max())
+                filters[col] = st.slider(
+                f"{col} range",
+                min_value=float(min_val),
+                max_value=float(max_val),
+                value=(float(min_val), float(max_val))
         )
+
+        filtered_df = df.copy()
+        for col, (min_val, max_val) in filters.items():
+            new_df = filtered_df[(filtered_df[col] >= min_val) & (filtered_df[col] <= max_val)]
+
+        st.write(f"Remaining molecules: {len(new_df)}")
+
+        # Generate 2D structures and property legends
+        st.subheader("2D Structures of Filtered Molecules")
+        mols = []
+        legends = []
+        new_df['mol_2'] = new_df[smiles_col].apply(lambda x: Chem.MolFromSmiles(x))
+        
+        #Add options to either display top 10 or all molecules
+        display_option = st.radio("Display options:", ("All filtered molecules", "Display all molecules in the dataset (no filtering)"), index=0)
+        
+        #choose legend from dropdown, list of columns, not mol column
+        legend_option = st.selectbox("Choose legend to display:", options=[col for col in new_df.columns if col != 'mol_2'], index=0)
+
+        if display_option == "All filtered molecules":
+            display_count = len(new_df)
+            html_data = mols2grid.display(new_df.head(display_count), mol_col='mol_2', size=(200, 200), 
+                                        subset=["img",legend_option],
+                                        n_items_per_page=16, 
+                                        fixedBondLength=25, clearBackground=False,
+                                        ).data
+            st.components.v1.html(html_data, height=1100, scrolling=True)
+        
+        elif display_option == "Display all molecules in the dataset (no filtering)":
+            no_restricted_df = df.copy()
+            display_count = len(df)
+            no_restricted_df['mol_2'] = no_restricted_df[smiles_col].apply(lambda x: Chem.MolFromSmiles(x))
+            #AllChem.Compute2DCoords(no_restricted_df['mol_2'][0])
+            #[AllChem.GenerateDepictionMatching2DStructure(m,no_restricted_df['mol_2'][0]) for m in no_restricted_df['mol_2']]
+            html_data = mols2grid.display(no_restricted_df.head(display_count), mol_col='mol_2', size=(200, 200), subset=["img",legend_option],n_items_per_page=16, fixedBondLength=25, clearBackground=False).data
+            st.components.v1.html(html_data, height=1100, scrolling=True)
+    
+    elif len(numeric_cols) == 0:
+        st.info("No numerical columns found in the dataset. Cannot apply filters.")
+        if smiles_col:
+            st.write("Displaying 2D structures of all molecules in the dataset.")
+            df['mol_2'] = df[smiles_col].apply(lambda x: Chem.MolFromSmiles(x))
+            display_count = len(df)
+            html_data = mols2grid.display(df.head(display_count), mol_col='mol_2', size=(200, 200), subset=["img",legend_option], n_items_per_page=16, fixedBondLength=25, clearBackground=False).data
+            st.components.v1.html(html_data, height=1100, scrolling=True)
+        else:
+            st.error("No SMILES column found (case-insensitive). Cannot visualise 2D structures.")
+    
+    ############################################################################
+    #
+    #   Calculate descriptors
+    #
+    ############################################################################
+    
+    st.subheader("Calculate descriptors")
+    st.markdown("Here, you can prepare your dataset for training machine learning models or some other analysis.") 
+    st.info("Select one or more descriptors and click 'Calculate'.")
+    # Define descriptor options
+    basic_descs = ['MolWt', 'MolLogP', 'NumHDonors', 'NumHAcceptors']
+
+    desc_basic = st.checkbox("Basic 2D descriptors")
+    desc_all = st.checkbox("All RDKit 2D descriptors (200+)")
+    desc_fp = st.checkbox("Morgan fingerprints (radius=2, nBits=2048)")
+    calculate = st.button("Calculate")
+
+    if calculate:
+        # Prepare molecule objects
+        mols = [Chem.MolFromSmiles(s) for s in df[smiles_col]]
+        result = pd.DataFrame({'SMILES': df[smiles_col]})
+        
+        if desc_basic:
+            for d in basic_descs:
+                func = getattr(Descriptors, d)
+                result[d] = [func(m) if m else None for m in mols]
+            #add rotatable bonds, TPSA and SA score
+            result['NumRotatableBonds_1'] = [Descriptors.NumRotatableBonds(m) if m else None for m in mols]
+            result['TPSA_1'] = [Descriptors.TPSA(m) if m else None for m in mols]
+            result['SAScore_1'] = [sascorer.calculateScore(m) if m else None for m in mols]
+            result['QED_1'] = [Chem.QED.qed(m) if m else None for m in mols]
+            #add suffix _1 to all the columns
+            result.rename(columns={d: d + '_1' for d in basic_descs}, inplace=True)
+        
+        if desc_all:
+            for dname, func in Descriptors._descList:
+                result[dname] = [func(m) if m else None for m in mols]
+            #add suffix _2 to the new columns
+            result.rename(columns={dname: dname + '_2' for dname, func in Descriptors._descList}, inplace=True)
+        
+        if desc_fp:
+            nBits = 2048
+            result['MorganFP'] = [
+                AllChem.GetMorganFingerprintAsBitVect(mol, 2, nBits).ToBitString() if mol else None
+                for mol in mols
+            ]
+        
+        st.subheader("Calculated Results")
+        #Concatenate the original dataframe with the result dataframe
+        final_df = pd.concat([df, result.drop(columns=['SMILES'])], axis=1)
+        st.write(f"The resulting dataframe has {final_df.shape[0]} rows and {final_df.shape[1]} columns.")
+        st.dataframe(final_df, use_container_width=True)
+        df_to_download = final_df.copy()
+    else:
+        df_to_download = df.copy()
+        
+    ###########################################################################################
+    #
+    #   Download the dataframe as SDF
+    #
+    ###########################################################################################
+    st.subheader("Download the DataFrame as SDF")
+    #st.markdown("You can download the DataFrame as an SDF file, which is a common format for storing molecular structures along with their associated data.")
+    
+    #check if there is a mol column in the dataframe
+    if 'mol' not in df_to_download.columns:
+        if smiles_col:
+            df_to_download['mol'] = df_to_download[smiles_col].apply(lambda x: Chem.MolFromSmiles(x))
+        else:
+            st.error("No SMILES column found (case-insensitive). Cannot generate SDF file.")
+    # Use PandasTools to convert DataFrame to SDF
+    from rdkit.Chem import PandasTools
+    
+    #Create a button to download the SDF file
+    sdf_buffer = StringIO()
+    PandasTools.WriteSDF(df_to_download, sdf_buffer, molColName='mol', properties=list(df_to_download.columns), idName=None)
+    sdf_data = sdf_buffer.getvalue()
+    sdf_buffer.close()
+    
+    #st.info("Click the button below to download the SDF file. If descriptors were calculated, they will be included as properties in the SDF file. Otherwise, only the orginal columns will be included.")
+    st.download_button(
+        label="Download SDF",
+        data=sdf_data,
+        file_name="molecules.sdf",
+        mime="chemical/x-mdl-sdfile"
+    )
 
 ##########################################################################
 #   Scaffold Identification
