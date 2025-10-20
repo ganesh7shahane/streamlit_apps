@@ -74,10 +74,6 @@ selected = option_menu(
     orientation="horizontal"
 )
 
-# Load default CSV file (local or URL)
-default_file_path = 'https://raw.githubusercontent.com/ganesh7shahane/useful_cheminformatics/refs/heads/main/data/FINE_TUNING_pi3k-mtor_objectives.csv'  # adjust path or use URL
-default_df = pd.read_csv(default_file_path)
-
 if selected == "DataFrame Viz":
     st.title("Molecule DataFrame Visualisation")
 
@@ -90,6 +86,9 @@ if selected == "DataFrame Viz":
     st.markdown("- :red[Calculate] RDKit descriptors: 2D Phys-chem descriptors, Morgan fingerprints or both")
     st.subheader("Upload the CSV file")
 
+    # Load default CSV file (local or URL)
+    default_file_path = 'https://raw.githubusercontent.com/ganesh7shahane/useful_cheminformatics/refs/heads/main/data/FINE_TUNING_pi3k-mtor_objectives.csv'  # adjust path or use URL
+    default_df = pd.read_csv(default_file_path)
     uploaded_file = st.file_uploader("", type=["csv"])
 
     ############################################################################
@@ -121,7 +120,7 @@ if selected == "DataFrame Viz":
             smiles_col = col
             break
     if smiles_col:
-        st.write(f"Identified SMILES column: {smiles_col}")
+        st.success(f"Identified SMILES column: {smiles_col}")
     else:
         st.error("No SMILES column found (case-insensitive). Some functionalities will be limited.")
         
@@ -165,7 +164,7 @@ if selected == "DataFrame Viz":
             st.info("You can change the default values of number of bins, color and figure size below.") 
             
             #shift the slider to the left column
-            col1, col2, col3 = st.columns(3)
+            col1, col2, col3 = st.columns(3, gap="large")
             with col1:
                 default_bins = st.slider("Number of bins", min_value=2, max_value=100, value=30, step=5)
             with col2:
@@ -191,16 +190,19 @@ if selected == "DataFrame Viz":
         st.markdown("---")
         
         st.subheader("**Draw a single column histogram or bar plot**")
-        #select whether to draw a histogram or barplot
-        plot_type = st.selectbox("Select plot type", options=["Histogram", "Bar Plot"])
-        selected_column = st.selectbox("Select a column", options=numeric_cols)
+        #select whether to draw a histogram or barplot, put these side-by-side
+        col1, col2 = st.columns(2)
+        with col1:
+            plot_type = st.selectbox("Select plot type", options=["Histogram", "Bar Plot"])
+        with col2:
+            selected_column = st.selectbox("Select a column", options=numeric_cols)
 
         # Only one column should be selected; if more are selected, take the last
         if plot_type == "Histogram" and selected_column:
             st.write(f"{plot_type} for: {selected_column}")
 
             # Prepare histogram
-            col1_1, col2_1, col3_1 = st.columns(3)
+            col1_1, col2_1, col3_1 = st.columns(3, gap="large")
             with col1_1:
                 default_bins_1 = st.slider("Bins", min_value=2, max_value=100, value=15, step=2)
             with col2_1:
@@ -276,12 +278,17 @@ if selected == "DataFrame Viz":
         
         st.subheader("Interactive Regression Plot")
         if len(numeric_cols) >= 2:
-            col1 = st.selectbox("Select X-axis column", options=numeric_cols, index=0)
-            col2 = st.selectbox("Select Y-axis column", options=numeric_cols, index=1)
+            #set col1 and col2 side-by-side
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                col1 = st.selectbox("Select X-axis column", options=numeric_cols, index=0)
+            with col2:
+                col2 = st.selectbox("Select Y-axis column", options=numeric_cols, index=1)
             if col1 and col2:                    
                 #Use plotly to make an interactive regression plot. When hovering over a point, show the 2D structure and index of the molecule
                 #colour slider
-                color_col = st.selectbox("Select color column", options=numeric_cols, index=2)
+                with col3:
+                    color_col = st.selectbox("Select color column", options=numeric_cols, index=2)
                 fig = px.scatter(df, x=col1, y=col2, hover_data=[df.index,smiles_col], size_max=50, color=color_col)
                 #add regression line and correlation coefficient to the title
                 corr_coef = df[[col1, col2]].corr().iloc[0, 1]
@@ -293,9 +300,14 @@ if selected == "DataFrame Viz":
             
         if len(numeric_cols)>=3:
             st.subheader("Interactive 3D Scatter Plot")
-            col_x = st.selectbox("Select X-axis column", options=numeric_cols, index=0, key="x_axis")
-            col_y = st.selectbox("Select Y-axis column", options=numeric_cols, index=1, key="y_axis")
-            col_z = st.selectbox("Select Z-axis column", options=numeric_cols, index=2, key="z_axis")
+            #put the three selectboxes side-by-side
+            col_x, col_y, col_z = st.columns(3)
+            with col_x:
+                col_x = st.selectbox("Select X-axis column", options=numeric_cols, index=0, key="x_axis")
+            with col_y:
+                col_y = st.selectbox("Select Y-axis column", options=numeric_cols, index=1, key="y_axis")
+            with col_z:
+                col_z = st.selectbox("Select Z-axis column", options=numeric_cols, index=2, key="z_axis")
             if col_x and col_y and col_z:
                 fig_3d = px.scatter_3d(df, x=col_x, y=col_y, z=col_z, hover_data=[df.index,smiles_col], size_max=50)
                 fig_3d.update_layout(title=f"3D Scatter Plot: {col_x} vs {col_y} vs {col_z}", title_font_size=20)
@@ -437,7 +449,7 @@ if selected == "DataFrame Viz":
     desc_basic = st.checkbox("Basic 2D descriptors")
     desc_all = st.checkbox("All RDKit 2D descriptors (200+)")
     desc_fp = st.checkbox("Morgan fingerprints (radius=2, nBits=2048)")
-    calculate = st.button("Calculate")
+    calculate = st.button("✅ Calculate", type="primary")
 
     if calculate:
         # Prepare molecule objects
@@ -503,10 +515,11 @@ if selected == "DataFrame Viz":
     
     #st.info("Click the button below to download the SDF file. If descriptors were calculated, they will be included as properties in the SDF file. Otherwise, only the orginal columns will be included.")
     st.download_button(
-        label="Download SDF",
+        label="⬇️ Download SDF",
         data=sdf_data,
         file_name="molecules.sdf",
-        mime="chemical/x-mdl-sdfile"
+        mime="chemical/x-mdl-sdfile",
+        type="primary"
     )
 
 ##########################################################################
@@ -729,8 +742,8 @@ if selected == "SMILES Analysis":
 
     # Launch the sketcher widget
     smiles = st_ketcher()
-    
-    st.title("SMILES Analysis")
+
+    st.subheader("SMILES Analysis")
     st.write("This page lets you input a SMILES string, visualise the 2D structure, compute some common 2D phys-chem descriptors, and alerts.")
     st.subheader("Input the SMILES string")
     smiles_input = st.text_input("Enter the SMILES string here", value="Cc1ccc(cc1Nc2nccc(n2)c3cccnc3)NC(=O)c4ccc(cc4)CN5CCN(CC5)C")
@@ -769,12 +782,6 @@ if selected == "SMILES Analysis":
 
                 #st.dataframe(desc_df_T, use_container_width=True)
                 st.table(desc_df_T)
-
-            # st.subheader("Check for Alerts")
-            # # initialize filter
-            # params = FilterCatalogParams()
-            # params.AddCatalog(FilterCatalogParams.FilterCatalogs.PAINS)
-            # catalog = FilterCatalog(params)
             
 
 #############################################################################
@@ -783,61 +790,33 @@ if selected == "SMILES Analysis":
 if selected == "R-group Analysis":
     st.title("🔬 R-group Analysis")
     st.markdown("R-group analysis is a powerful technique in medicinal chemistry that involves breaking down molecules into their core scaffolds and substituents (R-groups) to understand structure-activity relationships (SAR). This tool allows you to upload a dataset of molecules, decompose them into scaffolds and R-groups, and visualize the results.")
+    
+    # Load default CSV file (local or URL)
+    default_file_path = 'https://raw.githubusercontent.com/ganesh7shahane/practical_cheminformatics_tutorials/refs/heads/main/data/CHEMBL1075104.smi'  # adjust path or use URL
+    default_df = pd.read_csv(default_file_path)
     st.subheader("Upload the CSV file")
     uploaded_file = st.file_uploader("", type=["csv"])
     
     if uploaded_file is not None:
         # Read the uploaded CSV into a pandas DataFrame
         df = pd.read_csv(uploaded_file)
-        # Display the top 5 rows
-        st.subheader("Let's see how the dataset looks like")
-        rows = st.slider("Choose rows to display",1,len(df))
-        
-        st.dataframe(df.head(rows), use_container_width=True)
-        # Show the total number of rows
-        st.info(f"It appears there are {df.shape[0]} molecules in the dataset.")
-        # Find the SMILES column (case-insensitive)
-        smiles_col = None
-        for col in df.columns:
-            if col.lower() == "smiles":
-                smiles_col = col
-                break
-        if smiles_col:
-            st.write(f"Identified SMILES column: {smiles_col}")
-        else:
-            st.error("No SMILES column found (case-insensitive). Some functionalities will be limited.")
-            
-        # #Define some useful functions
-        # def remove_map_nums(mol):
-        #     """
-        #     Remove atom map numbers from a molecule
-        #     """
-        #     for atm in mol.GetAtoms():
-        #         atm.SetAtomMapNum(0)
-
-        # def sort_fragments(mol):
-        #     """
-        #     Transform a molecule with multiple fragments into a list of molecules that is sorted by number of atoms
-        #     from largest to smallest
-        #     """
-        #     frag_list = list(Chem.GetMolFrags(mol, asMols=True))
-        #     [remove_map_nums(x) for x in frag_list]
-        #     frag_num_atoms_list = [(x.GetNumAtoms(), x) for x in frag_list]
-        #     frag_num_atoms_list.sort(key=itemgetter(0), reverse=True)
-        #     return [x[1] for x in frag_num_atoms_list]
-        
-        # df['mol_'] = df.SMILES.apply(Chem.MolFromSmiles)
-
-        # df.mol_ = df.mol_.apply(uru.get_largest_fragment)
-
-        # #Decompose Molecules to Scaffolds and Sidechains
-        # row_list = []
-        # for smiles, name, pIC50, mol_ in df.values:
-        #     frag_list = FragmentMol(mol_,maxCuts=1)
-        #     #st.write("Before_2")
-        #     for _,frag_mol in frag_list:
-        #         pair_list = sort_fragments(frag_mol)
-        #         tmp_list = [smiles]+[Chem.MolToSmiles(x) for x in pair_list]+[name, pIC50]
-        #         row_list.append(tmp_list)
-        # row_df = pd.DataFrame(row_list,columns=["SMILES","Core","R_group","Name","pIC50"])
-        # st.dataframe(row_df.head(10))
+    else:
+        df = default_df
+        st.info("Using default CSV file for sample SAR analysis")
+    
+    st.subheader("Let's see how the dataset looks like")
+    rows = st.slider("Choose rows to display",1,len(df))
+    
+    st.dataframe(df.head(rows), use_container_width=True)
+    # Show the total number of rows
+    st.info(f"It appears there are {df.shape[0]} molecules in the dataset.")
+    # Find the SMILES column (case-insensitive)
+    smiles_col = None
+    for col in df.columns:
+        if col.lower() == "smiles":
+            smiles_col = col
+            break
+    if smiles_col:
+        st.write(f"Identified SMILES column: {smiles_col}")
+    else:
+        st.error("No SMILES column found (case-insensitive). Some functionalities will be limited.")
