@@ -6,7 +6,7 @@ import numpy as np
 import seaborn as sns
 import plotly.express as px
 from rdkit import Chem
-from rdkit.Chem import Draw
+from rdkit.Chem import Draw, rdRGroupDecomposition
 from rdkit.Chem.Draw import rdDepictor, rdMolDraw2D
 from rdkit.Chem import Descriptors
 from rdkit.Chem.FilterCatalog import *
@@ -75,7 +75,7 @@ selected = option_menu(
 )
 
 if selected == "DataFrame Viz":
-    st.title("Molecule DataFrame Visualisation")
+    st.title("⚛️ Molecule DataFrame Visualisation")
 
     st.markdown("Sometimes we have a CSV file containing SMILES and their properties, and we just wish to visualise it and analyse some of its properties. This web app is precisely for that.")
     st.markdown("Specifically, this page let's you:")
@@ -751,11 +751,11 @@ if selected == "SMILES Analysis":
         mol = Chem.MolFromSmiles(smiles_input)
         if mol:
             #Display image and table side-by-side
-            col1, col2 = st.columns([1, 1])
+            col1, col2 = st.columns([1, 1], gap="large")
             with col1:
                 st.subheader("2D Structure")
                 #make the image sharper
-                img = Draw.MolToImage(mol, size=(450, 480), kekulize=True)
+                img = Draw.MolToImage(mol, size=(850, 700), kekulize=True)
                 st.image(img, caption="2D structure of the input SMILES", use_container_width=False)
             with col2:
                 st.subheader("Properties")
@@ -781,7 +781,7 @@ if selected == "SMILES Analysis":
                 desc_df_T.columns = ['Value'] #rename column to Value
 
                 #st.dataframe(desc_df_T, use_container_width=True)
-                st.table(desc_df_T)
+                st.dataframe(desc_df_T, width='content')
             
 
 #############################################################################
@@ -790,9 +790,19 @@ if selected == "SMILES Analysis":
 if selected == "R-group Analysis":
     st.title("🔬 R-group Analysis")
     st.markdown("R-group analysis is a powerful technique in medicinal chemistry that involves breaking down molecules into their core scaffolds and substituents (R-groups) to understand structure-activity relationships (SAR). This tool allows you to upload a dataset of molecules, decompose them into scaffolds and R-groups, and visualize the results.")
+    st.markdown("""
+                In this section, you can:
+
+    - Read the input data from a CSV file
+    - Cluster the input data to identify similar molecules
+    - View the largest cluster and identify the common scaffold
+    - Perform the R-group decomposition
+    - View the R-groups and their frequency
+
+                """)
     
     # Load default CSV file (local or URL)
-    default_file_path = 'https://raw.githubusercontent.com/ganesh7shahane/practical_cheminformatics_tutorials/refs/heads/main/data/CHEMBL1075104.smi'  # adjust path or use URL
+    default_file_path = 'https://raw.githubusercontent.com/ganesh7shahane/streamlit_apps/refs/heads/main/data/chembl1075104.csv'  # adjust path or use URL
     default_df = pd.read_csv(default_file_path)
     st.subheader("Upload the CSV file")
     uploaded_file = st.file_uploader("", type=["csv"])
@@ -807,9 +817,10 @@ if selected == "R-group Analysis":
     st.subheader("Let's see how the dataset looks like")
     rows = st.slider("Choose rows to display",1,len(df))
     
-    st.dataframe(df.head(rows), use_container_width=True)
+    st.dataframe(df.head(rows), width='stretch')
     # Show the total number of rows
     st.info(f"It appears there are {df.shape[0]} molecules in the dataset.")
+    
     # Find the SMILES column (case-insensitive)
     smiles_col = None
     for col in df.columns:
@@ -820,3 +831,79 @@ if selected == "R-group Analysis":
         st.write(f"Identified SMILES column: {smiles_col}")
     else:
         st.error("No SMILES column found (case-insensitive). Some functionalities will be limited.")
+    
+    st.subheader("Perform butina clustering")
+    st.write("First, we calculate molecular fingerprints and then perform butina clustering based on them. This helps identify diverse subsets or clusters of similar compounds within a dataset.")
+    #Compute mol
+    df['mol'] = df.SMILES.apply(Chem.MolFromSmiles)
+    #Compute fingerprints and perform butina clustering
+    df['fp'] = df.mol.apply(uru.mol2morgan_fp)
+    df['cluster'] = uru.taylor_butina_clustering(df.fp.values)
+    
+    st.write(f"Total clusters identified: {df.cluster.nunique()}")
+    
+    st.write("select a cluster to visualise the molecules in that cluster")
+    
+    #display custer 
+    st.dataframe(df.cluster.value_counts(), width='content')
+     #display selectboxes side by side
+     
+    st.subheader("Select a cluster and identify common scaffold")
+
+    col1, col2 = st.columns(2)
+    with col1:  
+        cluster_to_visualize = st.selectbox("Select a cluster", df.cluster.unique(), index=df.index[0])
+    with col2:
+        #Choose legend from dropdown, list of columns, not mol column
+        legend_option = st.selectbox("Choose legend to display:", options=[col for col in df.columns if col not in ['mol','fp','cluster']], index=0)
+    df['ID'] = df[legend_option].astype(str)
+
+    html_data = mols2grid.display(df.query(f"cluster == {cluster_to_visualize}"), mol_col="mol",subset=["img","ID"], size=(200, 200), n_items_per_page=16, fixedBondLength=25, clearBackground=False).data
+        
+    num_molecules = df.query(f"cluster == {cluster_to_visualize}").shape[0]
+    if num_molecules >8 and num_molecules < 13:
+        st.components.v1.html(html_data, height=850, scrolling=True)
+    elif num_molecules <=4:
+        st.components.v1.html(html_data, height=400, scrolling=True)
+    elif num_molecules >4 and num_molecules <=8:
+        st.components.v1.html(html_data, height=600, scrolling=True)
+    else:
+        st.components.v1.html(html_data, height= 1100, scrolling=True)
+
+    #Text input to enter mol file
+    st.subheader("Define core or scaffold")
+    #Enter SMILES
+    smiles_inp = st.text_input("Enter SMILES of the scaffold", value="[*]C(=O)c1ccc(N[*])c(O[*])c1")
+    smiles_inp_mol = Chem.MolFromSmiles(smiles_inp)
+    AllChem.Compute2DCoords(smiles_inp_mol)
+    # Convert to MOL block string
+    mol_block = Chem.MolToMolBlock(smiles_inp_mol)
+    #Convert the mol block to mol object
+    core = Chem.MolFromMolBlock(mol_block)
+    #st.write(mol_block)
+    #mol_input = st.text_area("Enter mol file of the scaffold between triple quotes", value="\"\"\" \n\n\"\"\"")  
+
+    #core = Chem.MolFromMolBlock(mol_input)
+    #Display the core molecule
+    if core:
+        st.write("Scaffold structure:")
+        img = Draw.MolToImage(core, size=(300, 300), kekulize=True)
+        st.image(img, caption="Scaffold structure")
+    
+        #Now let's create a new Pandas dataframe from the molecules in cluster 0. 
+        df_0 = df.query("cluster == 0").copy()
+        
+        #we'll add and index column to keep track of things
+        df_0['index'] = range(0,len(df_0))
+        
+        st.subheader("Perform R-group decomposition on molecules")
+        #As mentioned above, we're using the function rdRGroupDecomposition.RGroupDecompose from the RDKit. 
+        # Note that RDKit returns two values from this function.
+
+        # rgd - a dictionary containing the results of the R-group decomposition. This dictionary has keys containing the core with a key "Core", and the R-groups in keys named "R1", "R2", etc. Each dictionary key links to a list of cores or R-groups corresponding input molecules that matched the core (didn't fail).
+        # failed - a list containing the indices of molecules that did not match the core.
+        
+        rgd,failed = rdRGroupDecomposition.RGroupDecompose([core],df_0.mol.values,asRows=False)
+
+        rgd_core = mols2grid.display(pd.DataFrame(rgd), mol_col="Core", size=(200, 200), n_items_per_page=16, fixedBondLength=25, clearBackground=False).data
+        st.components.v1.html(rgd_core, height=1100, scrolling=True)
