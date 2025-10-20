@@ -852,7 +852,7 @@ if selected == "R-group Analysis":
 
     col1, col2 = st.columns(2)
     with col1:  
-        cluster_to_visualize = st.selectbox("Select a cluster", df.cluster.unique(), index=df.index[0])
+        cluster_to_visualize = st.selectbox("Select a cluster", df.cluster.unique(), index=None)
     with col2:
         #Choose legend from dropdown, list of columns, not mol column
         legend_option = st.selectbox("Choose legend to display:", options=[col for col in df.columns if col not in ['mol','fp','cluster']], index=0)
@@ -886,24 +886,37 @@ if selected == "R-group Analysis":
     #core = Chem.MolFromMolBlock(mol_input)
     #Display the core molecule
     if core:
-        st.write("Scaffold structure:")
+        st.write("Here's the core molecule")
         img = Draw.MolToImage(core, size=(300, 300), kekulize=True)
         st.image(img, caption="Scaffold structure")
-    
+
+        st.write(f"Now let's create a new Pandas dataframe from the molecules in cluster {cluster_to_visualize}.")
         #Now let's create a new Pandas dataframe from the molecules in cluster 0. 
-        df_0 = df.query("cluster == 0").copy()
-        
+        df_0 = df.query(f"cluster == 0").copy()
+
         #we'll add and index column to keep track of things
         df_0['index'] = range(0,len(df_0))
+        st.write(f"There are {len(df_0)} molecules in cluster {cluster_to_visualize}.")
+        st.dataframe(df_0, width='stretch')
+        
         
         st.subheader("Perform R-group decomposition on molecules")
-        #As mentioned above, we're using the function rdRGroupDecomposition.RGroupDecompose from the RDKit. 
-        # Note that RDKit returns two values from this function.
-
-        # rgd - a dictionary containing the results of the R-group decomposition. This dictionary has keys containing the core with a key "Core", and the R-groups in keys named "R1", "R2", etc. Each dictionary key links to a list of cores or R-groups corresponding input molecules that matched the core (didn't fail).
-        # failed - a list containing the indices of molecules that did not match the core.
+        st.markdown(
+        """
+        As mentioned above, we're using the function rdRGroupDecomposition.RGroupDecompose from the RDKit. 
+        
+        Note that RDKit returns two values from this function.
+        
+        rgd - a dictionary containing the results of the R-group decomposition. This dictionary has keys containing the core with a key "Core", and the R-groups in keys named "R1", "R2", etc. Each dictionary key links to a list of cores or R-groups corresponding input molecules that matched the core (didn't fail).
+        
+        failed - a list containing the indices of molecules that did not match the core.
+        """
+        )
+        #
         
         rgd,failed = rdRGroupDecomposition.RGroupDecompose([core],df_0.mol.values,asRows=False)
 
-        rgd_core = mols2grid.display(pd.DataFrame(rgd), mol_col="Core", size=(200, 200), n_items_per_page=16, fixedBondLength=25, clearBackground=False).data
-        st.components.v1.html(rgd_core, height=1100, scrolling=True)
+        #rgd_core = mols2grid.display(pd.DataFrame(rgd), mol_col="Core", size=(200, 200), n_items_per_page=16, fixedBondLength=25, clearBackground=False).data
+        #st.components.v1.html(rgd_core, height=1100, scrolling=True)
+        st.write("Let's look at the first core, all the rest should be the same. ")
+        st.image(Draw.MolToImage(rgd['Core'][0], size=(300, 300), kekulize=True), caption="Core used for R-group decomposition")
