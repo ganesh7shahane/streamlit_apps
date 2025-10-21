@@ -6,12 +6,9 @@ import numpy as np
 import seaborn as sns
 import plotly.express as px
 from rdkit import Chem
-from rdkit.Chem import Draw, rdRGroupDecomposition
+from rdkit.Chem import Draw, rdRGroupDecomposition, Descriptors, FilterCatalog
 from rdkit.Chem.Draw import rdDepictor, rdMolDraw2D
-from rdkit.Chem import Descriptors
-from rdkit.Chem.FilterCatalog import *
-from rdkit.Chem import FilterCatalog
-from rdkit.Chem import rdMMPA, Draw
+from rdkit.Chem import rdMMPA
 import useful_rdkit_utils as uru
 from tqdm.auto import tqdm
 from itertools import chain
@@ -28,6 +25,7 @@ import base64
 import requests
 from rdkit import RDConfig
 import os
+import sys
 sys.path.append(os.path.join(RDConfig.RDContribDir, 'SA_Score'))
 import sascorer
 from rdkit.Chem.FilterCatalog import FilterCatalog, FilterCatalogParams
@@ -183,8 +181,8 @@ if selected == "DataFrame Viz":
 
             plt.tight_layout()      # Prevents overlapping text
             plt.gcf().set_dpi(300) # Set DPI for high resolution
-
-            st.pyplot(plt.gcf())    # Show the whole figure in Streamlit
+            with st.expander("Show Histograms", expanded=True):
+                st.pyplot(plt.gcf())  
 
         #Put up a divider
         st.markdown("---")
@@ -215,8 +213,9 @@ if selected == "DataFrame Viz":
             ax.set_title(f"Histogram of {selected_column}")
             ax.set_xlabel(selected_column)
             ax.set_ylabel("Frequency")
-            st.pyplot(fig)
-        
+            with st.expander("Show Histogram", expanded=True):
+                st.pyplot(fig)
+
         elif plot_type == "Bar Plot" and selected_column:
             st.write(f"{plot_type} for: {selected_column}")
 
@@ -257,10 +256,13 @@ if selected == "DataFrame Viz":
             ax.set_ylabel("Count")
             ax.set_title(f"Distribution of {selected_column}")
             plt.xticks(rotation=45, ha="right")
-            st.pyplot(fig)
+            with st.expander("Show Bar Plot", expanded=True):
+                st.pyplot(fig)
 
         ##put up a divider
         st.markdown("---")
+        
+        #Put the correlation heatmap under an expander
         
         st.subheader("Correlation Heatmap")
         st.markdown("A correlation heatmap helps to visualize the correlation coefficients between multiple numerical columns in a dataset. It provides insights into how different variables relate to each other, which can be useful for feature selection and understanding relationships in the data.")
@@ -269,7 +271,8 @@ if selected == "DataFrame Viz":
             fig, ax = plt.subplots(figsize=(10, 8), dpi=300)
             sns.heatmap(corr, annot=True, fmt=".1f", cmap="coolwarm", ax=ax)
             ax.set_title("Correlation Heatmap")
-            st.pyplot(fig)
+            with st.expander("Show Correlation Heatmap", expanded=True):
+                st.pyplot(fig)
         else:
             st.error("Not enough numerical columns to compute correlation heatmap.")
             
@@ -791,7 +794,7 @@ if selected == "R-group Analysis":
     st.title("🔬 R-group Analysis")
     st.markdown("R-group analysis is a powerful technique in medicinal chemistry that involves breaking down molecules into their core scaffolds and substituents (R-groups) to understand structure-activity relationships (SAR). This tool allows you to upload a dataset of molecules, decompose them into scaffolds and R-groups, and visualize the results.")
     st.markdown("""
-                In this section, you can:
+    In this section, you can:
 
     - Read the input data from a CSV file
     - Cluster the input data to identify similar molecules
@@ -841,9 +844,7 @@ if selected == "R-group Analysis":
     df['cluster'] = uru.taylor_butina_clustering(df.fp.values)
     
     st.write(f"Total clusters identified: {df.cluster.nunique()}")
-    
-    st.write("select a cluster to visualise the molecules in that cluster")
-    
+        
     #display custer 
     st.dataframe(df.cluster.value_counts(), width='content')
      #display selectboxes side by side
