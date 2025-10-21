@@ -559,180 +559,184 @@ if selected == "Identifying Scaffolds":
     from scaffold_finder import generate_fragments, find_scaffolds, get_molecules_with_scaffold, cleanup_fragment
 
     st.subheader("Upload the CSV file")
+    default_file_path = 'https://raw.githubusercontent.com/ganesh7shahane/useful_cheminformatics/refs/heads/main/data/FINE_TUNING_pi3k-mtor_objectives.csv'  # adjust path or use URL
+    default_df = pd.read_csv(default_file_path)
     uploaded_file = st.file_uploader("", type=["csv"])
     
     if uploaded_file is not None:
     # Read the uploaded CSV into a pandas DataFrame
         df = pd.read_csv(uploaded_file)
+    else:
+        df = default_df
+        st.info("Using default CSV file for sample SAR analysis")
+    # Display the top 5 rows
+    st.subheader("Let's see how the dataset looks like")
+    rows = st.slider("Choose rows to display",1,len(df))
+    st.dataframe(df.head(rows), use_container_width=True)
+    
+    # Show the total number of rows
+    st.write(f"Total rows: {df.shape[0]}")
+    
+    # Find the SMILES column (case-insensitive)
+    smiles_col = None
+    for col in df.columns:
+        if col.lower() == "smiles":
+            smiles_col = col
+            break
+    
+    #generate the mol objects
+    if smiles_col:
+        df["mol"] = df[smiles_col].apply(lambda x: Chem.MolFromSmiles(x))
+    else:
+        st.error("No SMILES column found (case-insensitive).")
+    
+    #identify scaffolds
+    st.subheader("Identify Scaffolds")
+    st.markdown("This might take a few seconds...")
+    
+    #identify the smiles column in the uploaded dataframe, if any of the columns has the regex 'smiles' in any pattern
+    if smiles_col:
+        st.write(f"Identified SMILES column: {smiles_col}")
         
-        # Display the top 5 rows
-        st.subheader("Let's see how the dataset looks like")
-        rows = st.slider("Choose rows to display",1,len(df))
-        st.dataframe(df.head(rows), use_container_width=True)
-        
-        # Show the total number of rows
-        st.write(f"Total rows: {df.shape[0]}")
-        
-        # Find the SMILES column (case-insensitive)
-        smiles_col = None
-        for col in df.columns:
-            if col.lower() == "smiles":
-                smiles_col = col
-                break
-        
-        #generate the mol objects
-        if smiles_col:
-            df["mol"] = df[smiles_col].apply(lambda x: Chem.MolFromSmiles(x))
-        else:
-            st.error("No SMILES column found (case-insensitive).")
-        
-        #identify scaffolds
-        st.subheader("Identify Scaffolds")
-        st.markdown("This might take a few seconds...")
-        
-        #identify the smiles column in the uploaded dataframe, if any of the columns has the regex 'smiles' in any pattern
-        if smiles_col:
-            st.write(f"Identified SMILES column: {smiles_col}")
-            
-        #Calculate Murcko_Scaffold for each molecule
-        df['Murcko_Scaffold'] = df[smiles_col].apply(lambda x: Chem.Scaffolds.MurckoScaffold.MurckoScaffoldSmiles(x) if x else None)
-        
-        # Now create a new dataframe with the unique Bemis-Murcko_Scaffolds and the number of molecules with the 
-        # scaffold in the initial dataset.
-        scaffold_df = uru.value_counts_df(df,"Murcko_Scaffold")
-        
-        # Visualise all scaffolds and their counts
-        st.write(f"There are {scaffold_df.shape[0]} unique scaffolds in the dataset and following are their counts")
-        st.dataframe(scaffold_df)
-        
-        #Plot a barplot of the counts of the scaffolds, with X-axis as index as the scaffold ID and count as the y-axis
-        fig, ax = plt.subplots(figsize=(8, 5), dpi=300)
-        #only horizontal and not vertical grid lines
-        ax.xaxis.grid(False)
-        ax.yaxis.grid(True)
-        
-        scaffold_df['count'][:20].plot(kind='bar', ax=ax, color="skyblue", edgecolor="black")
-        ax.set_title(f"Barplot of top 20 Scaffold Counts")
-        ax.set_xlabel("Scaffold ID")
-        ax.set_ylabel("Number of molecules with the scaffold")
-        st.pyplot(fig)
+    #Calculate Murcko_Scaffold for each molecule
+    df['Murcko_Scaffold'] = df[smiles_col].apply(lambda x: Chem.Scaffolds.MurckoScaffold.MurckoScaffoldSmiles(x) if x else None)
+    
+    # Now create a new dataframe with the unique Bemis-Murcko_Scaffolds and the number of molecules with the 
+    # scaffold in the initial dataset.
+    scaffold_df = uru.value_counts_df(df,"Murcko_Scaffold")
+    
+    # Visualise all scaffolds and their counts
+    st.write(f"There are {scaffold_df.shape[0]} unique scaffolds in the dataset and following are their counts")
+    st.dataframe(scaffold_df)
+    
+    #Plot a barplot of the counts of the scaffolds, with X-axis as index as the scaffold ID and count as the y-axis
+    fig, ax = plt.subplots(figsize=(8, 5), dpi=300)
+    #only horizontal and not vertical grid lines
+    ax.xaxis.grid(False)
+    ax.yaxis.grid(True)
+    
+    scaffold_df['count'][:20].plot(kind='bar', ax=ax, color="skyblue", edgecolor="black")
+    ax.set_title(f"Barplot of top 20 Scaffold Counts")
+    ax.set_xlabel("Scaffold ID")
+    ax.set_ylabel("Number of molecules with the scaffold")
+    st.pyplot(fig)
 
-        st.subheader(f"Let's visualise all the scaffolds")
-        #Visualise the scaffolds
-        mols = []
-        legends = []
-        
-        temp_scaffold_df = scaffold_df.copy()
-        temp_scaffold_df['mol_2'] = temp_scaffold_df['Murcko_Scaffold'].apply(lambda x: Chem.MolFromSmiles(x))
-        html_data = mols2grid.display(temp_scaffold_df, mol_col='mol_2', size=(200, 200), n_items_per_page=16, fixedBondLength=25, clearBackground=False).data
-        st.components.v1.html(html_data, height=1000, scrolling=True)
+    st.subheader(f"Let's visualise all the scaffolds")
+    #Visualise the scaffolds
+    mols = []
+    legends = []
+    
+    temp_scaffold_df = scaffold_df.copy()
+    temp_scaffold_df['mol_2'] = temp_scaffold_df['Murcko_Scaffold'].apply(lambda x: Chem.MolFromSmiles(x))
+    html_data = mols2grid.display(temp_scaffold_df, mol_col='mol_2', size=(200, 200), n_items_per_page=16, fixedBondLength=25, clearBackground=False).data
+    st.components.v1.html(html_data, height=1000, scrolling=True)
         
     ###############################################################################
     #
     #   Relate activity distribution with scaffolds
     #
     ###############################################################################
-        st.subheader("Let's relate activity distribution with scaffolds")
+    st.subheader("Let's relate activity distribution with scaffolds")
+
+    #first, we need a mol column in scaffold_df
+    scaffold_df['mol'] = scaffold_df['Murcko_Scaffold'].apply(lambda x: Chem.MolFromSmiles(x))
+
+    #Now we define the functions to plot boxplots and convert mol to base64 image
+    def boxplot_base64_image(dist: np.ndarray, x_lim: list[int] = None) -> str:
+        """
+        Plot a distribution as a seaborn boxplot and save the resulting image as a base64 image.
+
+        Parameters:
+        dist (np.ndarray): The distribution data to plot.
+        x_lim (list[int]): The x-axis limits for the boxplot.
+
+        Returns:
+        str: The base64 encoded image string.
+        """
+        if x_lim is None:
+            x_lim = [0, 10]
+        plt.figure(dpi=150)  # Set the figure size and resolution
+        sns.set(rc={'figure.figsize': (4, 1)})
+        sns.set_style('whitegrid')
+        ax = sns.boxplot(x=dist)
+        #set x_lim as per the input
+        ax.set_xlim(x_lim[0], x_lim[1])
+        s = io.BytesIO()
+        plt.savefig(s, format='png', bbox_inches="tight")
+        plt.close()
+        s = base64.b64encode(s.getvalue()).decode("utf-8").replace("\n", "")
+        return '<img align="left" src="data:image/png;base64,%s">' % s
+
+    def mol_to_base64_image(mol: Chem.Mol) -> str:
+        """
+        Convert an RDKit molecule to a base64 encoded image string.
+
+        Parameters:
+        mol (Chem.Mol): The RDKit molecule to convert.
+
+        Returns:
+        str: The base64 encoded image string.
+        """
+        plt.figure(dpi=400)
+        drawer = rdMolDraw2D.MolDraw2DCairo(350, 150)
+        drawer.DrawMolecule(mol)
+        drawer.FinishDrawing()
+        text = drawer.GetDrawingText()
+        im_text64 = base64.b64encode(text).decode('utf8')
+        img_str = f"<img src='data:image/png;base64, {im_text64}'/>"
+        return img_str
+
+    #With the functions above we can define this table with a few lines of code.
     
-        #first, we need a mol column in scaffold_df
-        scaffold_df['mol'] = scaffold_df['Murcko_Scaffold'].apply(lambda x: Chem.MolFromSmiles(x))
+    #drop down menu to select the activity column
+    numeric_cols = df.select_dtypes(include="number").columns.tolist()
+    activity_col = st.selectbox(":green[Select] the activity column from the dataframe.",options=numeric_cols, index=0)
+    #put the selected column in a variable
+    st.write(f"Selected activity column: {activity_col}")
     
-        #Now we define the functions to plot boxplots and convert mol to base64 image
-        def boxplot_base64_image(dist: np.ndarray, x_lim: list[int] = None) -> str:
-            """
-            Plot a distribution as a seaborn boxplot and save the resulting image as a base64 image.
+    #if activity_col contains any NaN values, delete the molecules and display an error message
+    if df[activity_col].isna().sum() > 0:
+        st.error(f"The selected activity column {activity_col} contains {df[activity_col].isna().sum()} NaN values. Removing such molecules and proceeding...")
+        df = df.dropna(subset=[activity_col])
 
-            Parameters:
-            dist (np.ndarray): The distribution data to plot.
-            x_lim (list[int]): The x-axis limits for the boxplot.
-
-            Returns:
-            str: The base64 encoded image string.
-            """
-            if x_lim is None:
-                x_lim = [0, 10]
-            plt.figure(dpi=150)  # Set the figure size and resolution
-            sns.set(rc={'figure.figsize': (4, 1)})
-            sns.set_style('whitegrid')
-            ax = sns.boxplot(x=dist)
-            #set x_lim as per the input
-            ax.set_xlim(x_lim[0], x_lim[1])
-            s = io.BytesIO()
-            plt.savefig(s, format='png', bbox_inches="tight")
-            plt.close()
-            s = base64.b64encode(s.getvalue()).decode("utf-8").replace("\n", "")
-            return '<img align="left" src="data:image/png;base64,%s">' % s
-
-        def mol_to_base64_image(mol: Chem.Mol) -> str:
-            """
-            Convert an RDKit molecule to a base64 encoded image string.
-
-            Parameters:
-            mol (Chem.Mol): The RDKit molecule to convert.
-
-            Returns:
-            str: The base64 encoded image string.
-            """
-            plt.figure(dpi=400)
-            drawer = rdMolDraw2D.MolDraw2DCairo(350, 150)
-            drawer.DrawMolecule(mol)
-            drawer.FinishDrawing()
-            text = drawer.GetDrawingText()
-            im_text64 = base64.b64encode(text).decode('utf8')
-            img_str = f"<img src='data:image/png;base64, {im_text64}'/>"
-            return img_str
-    
-        #With the functions above we can define this table with a few lines of code.
-        
-        #drop down menu to select the activity column
-        numeric_cols = df.select_dtypes(include="number").columns.tolist()
-        activity_col = st.selectbox(":green[Select] the activity column from the dataframe.",options=numeric_cols, index=0)
-        #put the selected column in a variable
-        st.write(f"Selected activity column: {activity_col}")
-        
-        #if activity_col contains any NaN values, delete the molecules and display an error message
-        if df[activity_col].isna().sum() > 0:
-            st.error(f"The selected activity column {activity_col} contains {df[activity_col].isna().sum()} NaN values. Removing such molecules and proceeding...")
-            df = df.dropna(subset=[activity_col])
-
-        if activity_col is not None:
-            rows_to_display = scaffold_df.shape[0]
-            tmp_df = scaffold_df.head(rows_to_display).copy()
-            tmp_df['mol_img'] = tmp_df.mol.apply(mol_to_base64_image)
-            #st.dataframe(tmp_df)
-            img_list = []
-            for smi in tmp_df['Murcko_Scaffold'].values:
-                img_list.append(boxplot_base64_image(df.query("Murcko_Scaffold == @smi")[activity_col].values, x_lim=[df[activity_col].min()*0.98, df[activity_col].max()*1.01]))
-            tmp_df['dist_img'] = img_list
-            #display the dataframe with the images
-            st.markdown(HTML(tmp_df[['mol_img','count','dist_img']].to_html(escape=False)).data, unsafe_allow_html=True)
-        else:
-            st.error("No activity column selected.")
+    if activity_col is not None:
+        rows_to_display = scaffold_df.shape[0]
+        tmp_df = scaffold_df.head(rows_to_display).copy()
+        tmp_df['mol_img'] = tmp_df.mol.apply(mol_to_base64_image)
+        #st.dataframe(tmp_df)
+        img_list = []
+        for smi in tmp_df['Murcko_Scaffold'].values:
+            img_list.append(boxplot_base64_image(df.query("Murcko_Scaffold == @smi")[activity_col].values, x_lim=[df[activity_col].min()*0.98, df[activity_col].max()*1.01]))
+        tmp_df['dist_img'] = img_list
+        #display the dataframe with the images
+        st.markdown(HTML(tmp_df[['mol_img','count','dist_img']].to_html(escape=False)).data, unsafe_allow_html=True)
+    else:
+        st.error("No activity column selected.")
     ###############################################################################
     #
     #   Examine molecules with a given scaffold
     #
     ###############################################################################
-        st.subheader("Examine molecules with a given scaffold")
-        scaffold_id = st.selectbox("Select a scaffold index", options=scaffold_df.index.tolist())
-        scaffold_smi = scaffold_df.Murcko_Scaffold.values[scaffold_id]
-        tmp_df = df.query("Murcko_Scaffold == @scaffold_smi").copy() #put molecules with the scaffold in a new dataframe
-        tmp_df['mol'] = tmp_df[smiles_col].apply(Chem.MolFromSmiles)
-        scaffold_mol = scaffold_df.mol.values[scaffold_id] #get mol object for the scaffold into scaffold_mol
-        AllChem.Compute2DCoords(scaffold_mol)
-        #[AllChem.GenerateDepictionMatching2DStructure(m,scaffold_mol) for m in tmp_df.mol]
-        #st.write("hello")
+    st.subheader("Examine molecules with a given scaffold")
+    scaffold_id = st.selectbox("Select a scaffold index", options=scaffold_df.index.tolist())
+    scaffold_smi = scaffold_df.Murcko_Scaffold.values[scaffold_id]
+    tmp_df = df.query("Murcko_Scaffold == @scaffold_smi").copy() #put molecules with the scaffold in a new dataframe
+    tmp_df['mol'] = tmp_df[smiles_col].apply(Chem.MolFromSmiles)
+    scaffold_mol = scaffold_df.mol.values[scaffold_id] #get mol object for the scaffold into scaffold_mol
+    AllChem.Compute2DCoords(scaffold_mol)
+    #[AllChem.GenerateDepictionMatching2DStructure(m,scaffold_mol) for m in tmp_df.mol]
+    #st.write("hello")
 
-        #concatenate legends
-        legend_ = st.selectbox("Select legend", options=[col for col in tmp_df.columns if col != 'mol'], index=0)
-        tmp_df['legend'] = tmp_df[legend_].astype(str)
-        #sort tmp_df as per descending order
-        tmp_df_sort = tmp_df.sort_values(activity_col, ascending=False)
-        #Draw molecules sorted as per ROCK2_log
+    #concatenate legends
+    legend_ = st.selectbox("Select legend", options=[col for col in tmp_df.columns if col != 'mol'], index=0)
+    tmp_df['legend'] = tmp_df[legend_].astype(str)
+    #sort tmp_df as per descending order
+    tmp_df_sort = tmp_df.sort_values(activity_col, ascending=False)
+    #Draw molecules sorted as per ROCK2_log
 
-        st.write(f"There are {len(tmp_df_sort)} molecules with scaffold ID {scaffold_id}")
-        html_data = mols2grid.display(tmp_df_sort, mol_col='mol', size=(200, 200), subset=["img","legend"], n_items_per_page=16, fixedBondLength=25, clearBackground=False).data
-        st.components.v1.html(html_data, height=1100, scrolling=True)
+    st.write(f"There are {len(tmp_df_sort)} molecules with scaffold ID {scaffold_id}")
+    html_data = mols2grid.display(tmp_df_sort, mol_col='mol', size=(200, 200), subset=["img","legend"], n_items_per_page=16, fixedBondLength=25, clearBackground=False).data
+    st.components.v1.html(html_data, height=1100, scrolling=True)
 
 ############################################################################################
 #   SMILES Analysis
