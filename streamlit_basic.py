@@ -66,7 +66,7 @@ pg = st.navigation(
 selected = option_menu(
     menu_title="Structure-Activity Relationship (SAR) Analysis Tools",
     menu_icon="bar-chart-fill",
-    options=["DataFrame Viz", "Identifying Scaffolds", "SMILES Analysis", "R-group Analysis"],
+    options=["DataFrame Viz", "Analyse Scaffolds", "SMILES Analysis", "R-group Analysis"],
     icons=["0-square", "1-square", "2-square", "3-square"],
     default_index=0,
     orientation="horizontal"
@@ -105,7 +105,7 @@ if selected == "DataFrame Viz":
         
     # Display the top 5 rows
     st.subheader("Let's see how the dataset looks like")
-    rows = st.slider("Choose rows to display",1,len(df))
+    rows = st.slider("Choose rows to display", 3, len(df))
     st.dataframe(df.head(rows), use_container_width=True)
     
     # Show the total number of rows
@@ -181,7 +181,7 @@ if selected == "DataFrame Viz":
 
             plt.tight_layout()      # Prevents overlapping text
             plt.gcf().set_dpi(300) # Set DPI for high resolution
-            with st.expander("Show Histograms", expanded=True):
+            with st.expander("Show/Hide Histograms", expanded=True):
                 st.pyplot(plt.gcf())  
 
         #Put up a divider
@@ -213,7 +213,7 @@ if selected == "DataFrame Viz":
             ax.set_title(f"Histogram of {selected_column}")
             ax.set_xlabel(selected_column)
             ax.set_ylabel("Frequency")
-            with st.expander("Show Histogram", expanded=True):
+            with st.expander("Show/Hide Histogram", expanded=True):
                 st.pyplot(fig)
 
         elif plot_type == "Bar Plot" and selected_column:
@@ -256,7 +256,7 @@ if selected == "DataFrame Viz":
             ax.set_ylabel("Count")
             ax.set_title(f"Distribution of {selected_column}")
             plt.xticks(rotation=45, ha="right")
-            with st.expander("Show Bar Plot", expanded=True):
+            with st.expander("Show/Hide Bar Plot", expanded=True):
                 st.pyplot(fig)
 
         ##put up a divider
@@ -271,7 +271,7 @@ if selected == "DataFrame Viz":
             fig, ax = plt.subplots(figsize=(10, 8), dpi=300)
             sns.heatmap(corr, annot=True, fmt=".1f", cmap="coolwarm", ax=ax)
             ax.set_title("Correlation Heatmap")
-            with st.expander("Show Correlation Heatmap", expanded=True):
+            with st.expander("Show/Hide Correlation Heatmap", expanded=True):
                 st.pyplot(fig)
         else:
             st.error("Not enough numerical columns to compute correlation heatmap.")
@@ -529,8 +529,8 @@ if selected == "DataFrame Viz":
 #   Scaffold Identification
 ###########################################################################
 
-if selected == "Identifying Scaffolds":
-    st.title("Identifying Scaffolds from a chemical series")    
+if selected == "Analyse Scaffolds":
+    st.title("📎 Identifying Scaffolds from a chemical series")    
     
     st.markdown("Identifying bioactive molecular (BM) scaffolds—the core structural frameworks that recur among active compounds in structure–activity relationship (SAR) datasets—is a critical step in modern drug discovery because it helps link chemistry to biological function systematically.")
 
@@ -559,7 +559,7 @@ if selected == "Identifying Scaffolds":
     from scaffold_finder import generate_fragments, find_scaffolds, get_molecules_with_scaffold, cleanup_fragment
 
     st.subheader("Upload the CSV file")
-    default_file_path = 'https://raw.githubusercontent.com/ganesh7shahane/useful_cheminformatics/refs/heads/main/data/FINE_TUNING_pi3k-mtor_objectives.csv'  # adjust path or use URL
+    default_file_path = 'https://raw.githubusercontent.com/ganesh7shahane/streamlit_apps/refs/heads/main/data/chembl208.csv'  # adjust path or use URL
     default_df = pd.read_csv(default_file_path)
     uploaded_file = st.file_uploader("", type=["csv"])
     
@@ -685,8 +685,6 @@ if selected == "Identifying Scaffolds":
         im_text64 = base64.b64encode(text).decode('utf8')
         img_str = f"<img src='data:image/png;base64, {im_text64}'/>"
         return img_str
-
-    #With the functions above we can define this table with a few lines of code.
     
     #drop down menu to select the activity column
     numeric_cols = df.select_dtypes(include="number").columns.tolist()
@@ -703,13 +701,13 @@ if selected == "Identifying Scaffolds":
         rows_to_display = scaffold_df.shape[0]
         tmp_df = scaffold_df.head(rows_to_display).copy()
         tmp_df['mol_img'] = tmp_df.mol.apply(mol_to_base64_image)
-        #st.dataframe(tmp_df)
         img_list = []
         for smi in tmp_df['Murcko_Scaffold'].values:
             img_list.append(boxplot_base64_image(df.query("Murcko_Scaffold == @smi")[activity_col].values, x_lim=[df[activity_col].min()*0.98, df[activity_col].max()*1.01]))
         tmp_df['dist_img'] = img_list
         #display the dataframe with the images
-        st.markdown(HTML(tmp_df[['mol_img','count','dist_img']].to_html(escape=False)).data, unsafe_allow_html=True)
+        with st.expander("Show/Hide Scaffold Activity Distribution", expanded=True):
+            st.markdown(HTML(tmp_df[['mol_img','count','dist_img']].to_html(escape=False)).data, unsafe_allow_html=True)
     else:
         st.error("No activity column selected.")
     ###############################################################################

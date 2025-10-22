@@ -1,4 +1,4 @@
-SMILES,ID,pIC50
+smiles,ID,pIC50
 O=c1[nH]c2ccc(-c3cccc(Cl)c3)cc2s1,CHEMBL94053,6.9
 O=c1[nH]c2ccc(-c3cccc([N+](=O)[O-])c3)cc2n1Cc1ccccc1,CHEMBL327409,6.15
 CC1=CC(C)(C)Nc2ccc(-c3cccc([N+](=O)[O-])c3)cc21,CHEMBL93027,7.7
