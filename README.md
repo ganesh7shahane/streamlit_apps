@@ -33,12 +33,9 @@ Built for: Medicinal chemists, computational chemists, and drug discovery scient
 ## 🔍 SMILES Analysis
 - Individual molecule deep-dive
 - 2D structure visualization
-- Comprehensive property calculation:
-- Molecular weight, LogP, TPSA, rotatable bonds
-- H-bond donors/acceptors, aromatic rings
-- Drug-likeness rules (Lipinski, Veber)
-- QED (Quantitative Estimate of Drug-likeness)
-- SA Score (Synthetic Accessibility)
+- Comprehensive property calculation: Molecular weight, LogP, TPSA, rotatable bonds, H-bond donors/acceptors, aromatic rings
+- Drug-likeness rules (Lipinski, Veber), QED (Quantitative Estimate of Drug-likeness), SA Score (Synthetic Accessibility)
+- ADMET properties: solubility, Caco-2 permeability, P-glycoprotein Inhibition, etc
 - BRICS fragmentation
 
 ## 🎯 Taylor-Butina Clustering
