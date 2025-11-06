@@ -19,10 +19,10 @@ Built for: Medicinal chemists, computational chemists, and drug discovery scient
 - Multiple plot types (histograms, scatter, heatmaps, box plots)
 - Molecular grid visualization with mols2grid
 - Calculate molecular descriptors on-the-fly
-- ADMET Predictions: Built-in Admetica integration for predicting:
-- Absorption: Caco-2, Solubility, Lipophilicity, P-gp interactions
-- Metabolism: CYP enzyme substrates and inhibitors (1A2, 2C9, 2C19, 2D6, 3A4)
-- Toxicity: hERG cardiac toxicity, LD50 acute toxicity
+- ADMET Predictions: Built-in admetica integration for predicting:
+    - Absorption: Caco-2, Solubility, Lipophilicity, P-gp interactions
+    - Metabolism: CYP enzyme substrates and inhibitors (1A2, 2C9, 2C19, 2D6, 3A4)
+    - Toxicity: hERG cardiac toxicity, LD50 acute toxicity
 
 ## 🔬 Scaffold Hunter
 - Murcko scaffold identification
