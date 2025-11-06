@@ -1,6 +1,6 @@
 """
-DataFrame Visualization Analyzer
-Handles CSV analysis, statistics, plotting, and molecular visualization.
+DataFrame visualisation Analyzer
+Handles CSV analysis, statistics, plotting, and molecular visualisation.
 """
 
 import streamlit as st
@@ -20,10 +20,10 @@ from sar_app.utils import MoleculeUtils, DataFrameUtils, PlotUtils
 
 
 class DataFrameAnalyzer(BaseAnalyzer):
-    """DataFrame visualization and analysis page."""
+    """DataFrame visualisation and analysis page."""
     
     def render(self):
-        """Render the DataFrame visualization page."""
+        """Render the DataFrame visualisation page."""
         st.title("⚛️ Molecule DataFrame Visualisation")
         
         # Introduction
@@ -45,8 +45,8 @@ class DataFrameAnalyzer(BaseAnalyzer):
         # Statistics
         self._display_statistics()
         
-        # Visualization
-        self._visualization_section()
+        # visualisation
+        self._visualisation_section()
         
         # Molecular grid
         if self.smiles_col:
@@ -174,15 +174,15 @@ class DataFrameAnalyzer(BaseAnalyzer):
         with st.expander("Descriptive Statistics", expanded=True):
             st.dataframe(self._df[numeric_cols].describe(), use_container_width=True)
     
-    def _visualization_section(self):
-        """Handle all visualization options."""
+    def _visualisation_section(self):
+        """Handle all visualisation options."""
         numeric_cols = DataFrameUtils.get_numeric_columns(self._df)
         
         if len(numeric_cols) < 1:
             return
         
         st.markdown("---")
-        st.subheader("📈 Visualizations")
+        st.subheader("📈 Visualisations")
         
         # Multiple histograms
         if len(numeric_cols) > 1:
@@ -387,7 +387,7 @@ class DataFrameAnalyzer(BaseAnalyzer):
     def _molecular_grid_section(self):
         """Display molecular grid with filtering options."""
         st.markdown("---")
-        st.subheader("🧬 2D Molecule Visualization")
+        st.subheader("🧬 2D Molecule Visualisation")
         
         numeric_cols = DataFrameUtils.get_numeric_columns(self._df)
         
