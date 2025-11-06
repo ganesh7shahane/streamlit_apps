@@ -36,9 +36,10 @@ class AppConfig:
     DEFAULT_CLUSTERING_URL: str = 'https://raw.githubusercontent.com/ganesh7shahane/streamlit_apps/refs/heads/main/data/chembl1075104.csv'
     
     # Styling
-    SIDEBAR_BG_COLOR: str = "#f0f2f6"
+    SIDEBAR_BG_COLOR: str = "#cef1f7"
     PRIMARY_COLOR: str = "#1E88E5"
     SECONDARY_COLOR: str = "#FFA726"
+    #BACKGROUND_COLOR: str = "#252805"
     
     # Plot Settings
     PLOT_DPI: int = 300

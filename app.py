@@ -88,8 +88,8 @@ class SARApplication:
             default_index=current_index,
             orientation="horizontal",
             styles={
-                "container": {"padding": "0!important", "background-color": "#fafafa"},
-                "icon": {"color": "red", "font-size": "18px"},
+                "container": {"padding": "0!important", "background-color": "#f8fae1"},
+                "icon": {"color": "red", "font-size": "20px"},
                 "nav-link": {
                     "font-size": "16px",
                     "text-align": "center",
