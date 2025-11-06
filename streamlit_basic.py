@@ -29,6 +29,7 @@ import sys
 sys.path.append(os.path.join(RDConfig.RDContribDir, 'SA_Score'))
 import sascorer
 from rdkit.Chem.FilterCatalog import FilterCatalog, FilterCatalogParams
+from streamlit_ketcher import st_ketcher
 
 #adjust the width of the page
 st.html("""
@@ -36,26 +37,81 @@ st.html("""
         .stMainBlockContainer {
             max-width:55rem;
         }
+        /* Sidebar styling */
+        [data-testid="stSidebar"] {
+            background-color: #f0f2f6;
+        }
+        [data-testid="stSidebar"] .stMarkdown {
+            padding: 0.5rem 0;
+        }
     </style>
     """
 )
+
+############################################################################
+#
+# Define Sidebar with Chemical Sketcher
+#
+############################################################################
+
+with st.sidebar:
+    st.title("🧪 Chemical Sketcher")
+    st.markdown("Draw a molecule using Ketcher below:")
+    
+    # Launch the Ketcher chemical sketcher
+    molecule_smiles = st_ketcher()
+    
+    # Display the SMILES string if a molecule is drawn
+    if molecule_smiles:
+        st.subheader("Generated SMILES:")
+        st.code(molecule_smiles, language="text")
+        
+        # Option to copy SMILES
+        if st.button("📋 Copy SMILES to Clipboard"):
+            st.write("SMILES copied!")
+            st.toast("SMILES copied to clipboard!", icon="✅")
+        
+        # Add button to analyze in SMILES Analysis page
+        st.info("💡 Go to 'SMILES Analysis' page to see detailed analysis of this molecule!")
+        
+        # Display molecular properties if SMILES is valid
+        try:
+            mol = Chem.MolFromSmiles(molecule_smiles)
+            if mol:
+                st.subheader("Quick Properties:")
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.metric("MW", f"{Descriptors.MolWt(mol):.2f}")
+                    st.metric("LogP", f"{Descriptors.MolLogP(mol):.2f}")
+                with col2:
+                    st.metric("HBD", Descriptors.NumHDonors(mol))
+                    st.metric("HBA", Descriptors.NumHAcceptors(mol))
+        except:
+            st.warning("Invalid SMILES structure")
+    else:
+        st.info("Draw a molecule above to see its SMILES and properties")
+    
+    st.markdown("---")
+    st.markdown("### 📚 Quick Links")
+    st.markdown("- [Ketcher Documentation](https://github.com/epam/ketcher)")
+    st.markdown("- [RDKit Blog](https://greglandrum.github.io/rdkit-blog/)")
+    st.markdown("- My Github: [ganesh7shahane](https://github.com/ganesh7shahane)")
+
+# Store molecule_smiles in session state for use across pages
+if molecule_smiles:
+    st.session_state['sketched_smiles'] = molecule_smiles
+    st.session_state['sketched_mol'] = Chem.MolFromSmiles(molecule_smiles) if Chem.MolFromSmiles(molecule_smiles) else None
+else:
+    st.session_state['sketched_smiles'] = None
+    st.session_state['sketched_mol'] = None
+
 ############################################################################
 #
 # Define SideBar Menu for different pages
 #
 ############################################################################
 
-freedom = st.Page("virtual_screening/search_freedomspace.py", title="Search Ultra-Large Library", icon=":material/dashboard:")
-esp = st.Page("virtual_screening/esp_similarity.py", title="ESP Similarity", icon=":material/bubble_chart:")
-fp = st.Page("virtual_screening/fingerprint_similarity.py", title="Fingerprint Similarity", icon=":material/grid_on:")
 
-quick = st.Page("QSAR_modelling/quick_QSAR.py", title="Quick QSAR", icon=":material/bug_report:")
-
-pg = st.navigation(
-    {
-        "Virtual Screening":[freedom, esp, fp],
-        "QSAR Modelling":[quick]
-    })
 
 ############################################################################
 #
@@ -66,7 +122,7 @@ pg = st.navigation(
 selected = option_menu(
     menu_title="Structure-Activity Relationship (SAR) Analysis Tools",
     menu_icon="bar-chart-fill",
-    options=["DataFrame Viz", "Analyse Scaffolds", "SMILES Analysis", "R-group Analysis"],
+    options=["DataFrame Viz", "Analyse Scaffolds", "SMILES Analysis", "Taylor-Butina Clustering"],
     icons=["0-square", "1-square", "2-square", "3-square"],
     default_index=0,
     orientation="horizontal"
@@ -77,7 +133,7 @@ if selected == "DataFrame Viz":
 
     st.markdown("Sometimes we have a CSV file containing SMILES and their properties, and we just wish to visualise it and analyse some of its properties. This web app is precisely for that.")
     st.markdown("Specifically, this page let's you:")
-    st.markdown("- :red[View] the CSV file as a Pandas DataFrame")
+    st.markdown("- :red[View & Clean] the CSV file as a Pandas DataFrame")
     st.markdown("- :red[Compute] stats on the numerical columns: NaN count, mean, count, std, min, max etc.")
     st.markdown("- :red[Plot] histograms, barplots, correlation heatmaps of the numerical columns")
     st.markdown("- :red[Visualise] the 2D structures of the molecules")
@@ -86,7 +142,7 @@ if selected == "DataFrame Viz":
 
     # Load default CSV file (local or URL)
     default_file_path = 'https://raw.githubusercontent.com/ganesh7shahane/useful_cheminformatics/refs/heads/main/data/FINE_TUNING_pi3k-mtor_objectives.csv'  # adjust path or use URL
-    default_df = pd.read_csv(default_file_path)
+    default_df = pd.read_csv(default_file_path, index_col=False)
     uploaded_file = st.file_uploader("", type=["csv"])
 
     ############################################################################
@@ -97,7 +153,7 @@ if selected == "DataFrame Viz":
 
     if uploaded_file is not None:
         # Read the uploaded CSV into a pandas DataFrame
-        df = pd.read_csv(uploaded_file)
+        df = pd.read_csv(uploaded_file, index_col=False)
         st.success(f"Analyzing uploaded file: {uploaded_file.name}")
     else:
         df = default_df
@@ -106,7 +162,50 @@ if selected == "DataFrame Viz":
     # Display the top 5 rows
     st.subheader("Let's see how the dataset looks like")
     rows = st.slider("Choose rows to display", 3, len(df))
-    st.dataframe(df.head(rows), use_container_width=True)
+    col1,col2 = st.columns(2, gap="large")
+    with col1:
+        #add a checkbox to remove duplcate molecules based on inchi computed from SMILES
+        remove_invalid_smiles = st.checkbox("Remove invalid SMILES that RDKit cannot read", value=True)
+        if remove_invalid_smiles:
+            # Find the SMILES column (case-insensitive)
+            smiles_col = None
+            for col in df.columns:
+                if col.lower() == "smiles":
+                    smiles_col = col
+                    break
+            if smiles_col:
+                valid_smiles = []
+                invalid_smiles = []
+                for smi in df[smiles_col]:
+                    try:
+                        Chem.CanonSmiles(smi)
+                        valid_smiles.append(smi)
+                    except:
+                        invalid_smiles.append(smi)
+                before_count = df.shape[0]
+                df = df[df[smiles_col].isin(valid_smiles)].reset_index(drop=True)
+                after_count = df.shape[0]
+                st.success(f"Removed {before_count - after_count} invalid SMILES.")
+            else:
+                st.error("No SMILES column found (case-insensitive). Cannot remove invalid SMILES.")
+    with col2:
+        remove_duplicates = st.checkbox("Remove duplicate molecules based on InChI", value=False)
+        if remove_duplicates:
+            # Find the SMILES column (case-insensitive)
+            smiles_col = None
+            for col in df.columns:
+                if col.lower() == "smiles":
+                    smiles_col = col
+                    break
+            if smiles_col:
+                df.loc[:, 'InChI_'] = df[smiles_col].apply(lambda x: Chem.MolToInchi(Chem.MolFromSmiles(x)) if x else None)
+                before_count = df.shape[0]
+                df = df.drop_duplicates(subset=['InChI_']).reset_index(drop=True)
+                after_count = df.shape[0]
+                st.success(f"Removed {before_count - after_count} duplicate molecules based on InChI.")
+            else:
+                st.error("No SMILES column found (case-insensitive). Cannot remove duplicates.")
+    st.dataframe(df.head(rows))
     
     # Show the total number of rows
     st.info(f"It appears there are {df.shape[0]} molecules in the dataset.")
@@ -241,7 +340,7 @@ if selected == "DataFrame Viz":
             else:
                 bin_width = default_bin_width
             bins = np.arange(col_min, col_max + bin_width, bin_width)
-            df["binned"] = pd.cut(df[selected_column], bins=bins, include_lowest=True)
+            df.loc[:, "binned"] = pd.cut(df[selected_column], bins=bins, include_lowest=True)
 
             # Count frequency per bin
             bin_counts = df["binned"].value_counts().sort_index()
@@ -363,7 +462,7 @@ if selected == "DataFrame Viz":
     if len(delete_smiles) == 0:
         st.success("All SMILES strings are valid and can be read by RDKit.")
     else:   
-        st.error(f"There are {len(delete_smiles)} invalid SMILES strings that RDKit cannot read.")
+        st.error(f"There are {len(delete_smiles)} invalid SMILES strings.")
         st.write(f"These invalid SMILES strings are:")
         st.write(delete_smiles)
         st.write("Removing these invalid SMILES strings from the dataset and proceeding...")
@@ -379,6 +478,8 @@ if selected == "DataFrame Viz":
         filters = {}
         # Create two columns for layout
         col1, col2 = st.columns(2, gap="large")
+        #remove columns from numeric_cols that have constant values
+        numeric_cols = [col for col in numeric_cols if df[col].nunique() > 1]
         for idx, col in enumerate(numeric_cols):
             with col1 if idx % 2 == 0 else col2:
                 min_val = float(df[col].min())
@@ -400,7 +501,7 @@ if selected == "DataFrame Viz":
         st.subheader("2D Structures of Filtered Molecules")
         mols = []
         legends = []
-        new_df['mol_2'] = new_df[smiles_col].apply(lambda x: Chem.MolFromSmiles(x))
+        new_df.loc[:, 'mol_2'] = new_df[smiles_col].apply(lambda x: Chem.MolFromSmiles(x))
         
         #Add options to either display top 10 or all molecules
         display_option = st.radio("Display options:", ("All filtered molecules", "Display all molecules in the dataset (no filtering)"), index=0)
@@ -420,7 +521,7 @@ if selected == "DataFrame Viz":
         elif display_option == "Display all molecules in the dataset (no filtering)":
             no_restricted_df = df.copy()
             display_count = len(df)
-            no_restricted_df['mol_2'] = no_restricted_df[smiles_col].apply(lambda x: Chem.MolFromSmiles(x))
+            no_restricted_df.loc[:, 'mol_2'] = no_restricted_df[smiles_col].apply(lambda x: Chem.MolFromSmiles(x))
             #AllChem.Compute2DCoords(no_restricted_df['mol_2'][0])
             #[AllChem.GenerateDepictionMatching2DStructure(m,no_restricted_df['mol_2'][0]) for m in no_restricted_df['mol_2']]
             html_data = mols2grid.display(no_restricted_df.head(display_count), mol_col='mol_2', size=(200, 200), subset=["img",legend_option],n_items_per_page=16, fixedBondLength=25, clearBackground=False).data
@@ -430,7 +531,7 @@ if selected == "DataFrame Viz":
         st.info("No numerical columns found in the dataset. Cannot apply filters.")
         if smiles_col:
             st.write("Displaying 2D structures of all molecules in the dataset.")
-            df['mol_2'] = df[smiles_col].apply(lambda x: Chem.MolFromSmiles(x))
+            df.loc[:, 'mol_2'] = df[smiles_col].apply(lambda x: Chem.MolFromSmiles(x))
             display_count = len(df)
             html_data = mols2grid.display(df.head(display_count), mol_col='mol_2', size=(200, 200), subset=["img",legend_option], n_items_per_page=16, fixedBondLength=25, clearBackground=False).data
             st.components.v1.html(html_data, height=1100, scrolling=True)
@@ -504,7 +605,7 @@ if selected == "DataFrame Viz":
     #check if there is a mol column in the dataframe
     if 'mol' not in df_to_download.columns:
         if smiles_col:
-            df_to_download['mol'] = df_to_download[smiles_col].apply(lambda x: Chem.MolFromSmiles(x))
+            df_to_download.loc[:, 'mol'] = df_to_download[smiles_col].apply(lambda x: Chem.MolFromSmiles(x))
         else:
             st.error("No SMILES column found (case-insensitive). Cannot generate SDF file.")
     # Use PandasTools to convert DataFrame to SDF
@@ -532,21 +633,14 @@ if selected == "DataFrame Viz":
 if selected == "Analyse Scaffolds":
     st.title("📎 Identifying Scaffolds from a chemical series")    
     
-    st.markdown("Identifying bioactive molecular (BM) scaffolds—the core structural frameworks that recur among active compounds in structure–activity relationship (SAR) datasets—is a critical step in modern drug discovery because it helps link chemistry to biological function systematically.")
+    st.markdown("Identifying Bemis Murcko (BM) scaffolds—the core structural frameworks that recur among active compounds in SAR datasets—is a critical step because it helps link structure to biological function.")
 
     st.markdown("- BM scaffolds identify the chemical “core” responsible for a compound’s biological activity, enabling chemists to understand which parts of the structure can be modified without losing potency.")
 
     st.markdown("- Once scaffolds associated with high activity are known, chemists can perform scaffold decoration and substituent optimization more effectively to improve pharmacological properties such as potency, selectivity, and solubility.")
 
-    st.markdown("- Recognizing key scaffolds allows researchers to explore novel chemotypes via scaffold hopping—designing structurally distinct molecules that retain activity—thus improving intellectual property diversity and discovering new drugs for existing targets.") 
+    st.markdown("- Recognizing key scaffolds allows researchers to explore novel chemotypes via scaffold hopping—designing structurally distinct molecules that retain activity—thus improving IP diversity and discovering new drugs for existing targets.") 
 
-    st.markdown("- Scaffold analysis reveals gaps and redundancies within screening libraries, ensuring broad coverage of molecular diversity and guiding the design of diverse and efficient compound collections.")
-
-    st.markdown("- When scaffolds are annotated by bioactivity, they serve as meaningful units for classification in quantitative SAR models, allowing better correlation between molecular features and biological outcomes.")
-
-    st.markdown("- Privileged scaffolds—frameworks capable of interacting with multiple receptor types—can be recognized through BM scaffold identification, accelerating discovery of versatile, bioactive chemotypes.")
-
-    st.markdown("- Focusing on validated scaffolds helps filter large SAR datasets, reducing noise and simplifying candidate selection processes, which improves hit-to-lead progression speed.")
     from rdkit.Chem.Scaffolds import MurckoScaffold
     import useful_rdkit_utils as uru
     
@@ -560,22 +654,69 @@ if selected == "Analyse Scaffolds":
 
     st.subheader("Upload the CSV file")
     default_file_path = 'https://raw.githubusercontent.com/ganesh7shahane/streamlit_apps/refs/heads/main/data/chembl208.csv'  # adjust path or use URL
-    default_df = pd.read_csv(default_file_path)
+    default_df = pd.read_csv(default_file_path, index_col=False)
     uploaded_file = st.file_uploader("", type=["csv"])
     
     if uploaded_file is not None:
-    # Read the uploaded CSV into a pandas DataFrame
-        df = pd.read_csv(uploaded_file)
+        # Read the uploaded CSV into a pandas DataFrame
+        df = pd.read_csv(uploaded_file, index_col=False)
+        st.success(f"Analyzing uploaded file: {uploaded_file.name}")
     else:
         df = default_df
         st.info("Using default CSV file for sample SAR analysis")
+        
     # Display the top 5 rows
     st.subheader("Let's see how the dataset looks like")
-    rows = st.slider("Choose rows to display",1,len(df))
-    st.dataframe(df.head(rows), use_container_width=True)
+    
+    rows = st.slider("Choose rows to display", 3, len(df))
+    
+    col1,col2 = st.columns(2, gap="large")
+    with col1:
+        #add a checkbox to remove duplcate molecules based on inchi computed from SMILES
+        remove_invalid_smiles = st.checkbox("Remove invalid SMILES that RDKit cannot read", value=True)
+        if remove_invalid_smiles:
+            # Find the SMILES column (case-insensitive)
+            smiles_col = None
+            for col in df.columns:
+                if col.lower() == "smiles":
+                    smiles_col = col
+                    break
+            if smiles_col:
+                valid_smiles = []
+                invalid_smiles = []
+                for smi in df[smiles_col]:
+                    try:
+                        Chem.CanonSmiles(smi)
+                        valid_smiles.append(smi)
+                    except:
+                        invalid_smiles.append(smi)
+                before_count = df.shape[0]
+                df = df[df[smiles_col].isin(valid_smiles)].reset_index(drop=True)
+                after_count = df.shape[0]
+                st.success(f"Removed {before_count - after_count} invalid SMILES.")
+            else:
+                st.error("No SMILES column found (case-insensitive). Cannot remove invalid SMILES.")
+    with col2:  
+        remove_duplicates = st.checkbox("Remove duplicate molecules based on InChI", value=False)
+        if remove_duplicates:
+            # Find the SMILES column (case-insensitive)
+            smiles_col = None
+            for col in df.columns:
+                if col.lower() == "smiles":
+                    smiles_col = col
+                    break
+            if smiles_col:
+                df.loc[:, 'InChI_'] = df[smiles_col].apply(lambda x: Chem.MolToInchi(Chem.MolFromSmiles(x)) if x else None)
+                before_count = df.shape[0]
+                df = df.drop_duplicates(subset=['InChI_']).reset_index(drop=True)
+                after_count = df.shape[0]
+                st.success(f"Removed {before_count - after_count} duplicate molecules based on InChI.")
+            else:
+                st.error("No SMILES column found (case-insensitive). Cannot remove duplicates.")
+    st.dataframe(df.head(rows))
     
     # Show the total number of rows
-    st.write(f"Total rows: {df.shape[0]}")
+    st.info(f"It appears there are {df.shape[0]} molecules in the dataset.")
     
     # Find the SMILES column (case-insensitive)
     smiles_col = None
@@ -583,12 +724,10 @@ if selected == "Analyse Scaffolds":
         if col.lower() == "smiles":
             smiles_col = col
             break
-    
-    #generate the mol objects
     if smiles_col:
-        df["mol"] = df[smiles_col].apply(lambda x: Chem.MolFromSmiles(x))
+        st.success(f"Identified SMILES column: {smiles_col}")
     else:
-        st.error("No SMILES column found (case-insensitive).")
+        st.error("No SMILES column found (case-insensitive). Some functionalities will be limited.")
     
     #identify scaffolds
     st.subheader("Identify Scaffolds")
@@ -599,7 +738,7 @@ if selected == "Analyse Scaffolds":
         st.write(f"Identified SMILES column: {smiles_col}")
         
     #Calculate Murcko_Scaffold for each molecule
-    df['Murcko_Scaffold'] = df[smiles_col].apply(lambda x: Chem.Scaffolds.MurckoScaffold.MurckoScaffoldSmiles(x) if x else None)
+    df.loc[:, 'Murcko_Scaffold'] = df[smiles_col].apply(lambda x: Chem.Scaffolds.MurckoScaffold.MurckoScaffoldSmiles(x) if x else None)
     
     # Now create a new dataframe with the unique Bemis-Murcko_Scaffolds and the number of molecules with the 
     # scaffold in the initial dataset.
@@ -627,7 +766,7 @@ if selected == "Analyse Scaffolds":
     legends = []
     
     temp_scaffold_df = scaffold_df.copy()
-    temp_scaffold_df['mol_2'] = temp_scaffold_df['Murcko_Scaffold'].apply(lambda x: Chem.MolFromSmiles(x))
+    temp_scaffold_df.loc[:, 'mol_2'] = temp_scaffold_df['Murcko_Scaffold'].apply(lambda x: Chem.MolFromSmiles(x))
     html_data = mols2grid.display(temp_scaffold_df, mol_col='mol_2', size=(200, 200), n_items_per_page=16, fixedBondLength=25, clearBackground=False).data
     st.components.v1.html(html_data, height=1000, scrolling=True)
         
@@ -639,7 +778,7 @@ if selected == "Analyse Scaffolds":
     st.subheader("Let's relate activity distribution with scaffolds")
 
     #first, we need a mol column in scaffold_df
-    scaffold_df['mol'] = scaffold_df['Murcko_Scaffold'].apply(lambda x: Chem.MolFromSmiles(x))
+    scaffold_df.loc[:, 'mol'] = scaffold_df['Murcko_Scaffold'].apply(lambda x: Chem.MolFromSmiles(x))
 
     #Now we define the functions to plot boxplots and convert mol to base64 image
     def boxplot_base64_image(dist: np.ndarray, x_lim: list[int] = None) -> str:
@@ -700,11 +839,11 @@ if selected == "Analyse Scaffolds":
     if activity_col is not None:
         rows_to_display = scaffold_df.shape[0]
         tmp_df = scaffold_df.head(rows_to_display).copy()
-        tmp_df['mol_img'] = tmp_df.mol.apply(mol_to_base64_image)
+        tmp_df.loc[:, 'mol_img'] = tmp_df.mol.apply(mol_to_base64_image)
         img_list = []
         for smi in tmp_df['Murcko_Scaffold'].values:
             img_list.append(boxplot_base64_image(df.query("Murcko_Scaffold == @smi")[activity_col].values, x_lim=[df[activity_col].min()*0.98, df[activity_col].max()*1.01]))
-        tmp_df['dist_img'] = img_list
+        tmp_df.loc[:, 'dist_img'] = img_list
         #display the dataframe with the images
         with st.expander("Show/Hide Scaffold Activity Distribution", expanded=True):
             st.markdown(HTML(tmp_df[['mol_img','count','dist_img']].to_html(escape=False)).data, unsafe_allow_html=True)
@@ -719,7 +858,7 @@ if selected == "Analyse Scaffolds":
     scaffold_id = st.selectbox("Select a scaffold index", options=scaffold_df.index.tolist())
     scaffold_smi = scaffold_df.Murcko_Scaffold.values[scaffold_id]
     tmp_df = df.query("Murcko_Scaffold == @scaffold_smi").copy() #put molecules with the scaffold in a new dataframe
-    tmp_df['mol'] = tmp_df[smiles_col].apply(Chem.MolFromSmiles)
+    tmp_df.loc[:, 'mol'] = tmp_df[smiles_col].apply(Chem.MolFromSmiles)
     scaffold_mol = scaffold_df.mol.values[scaffold_id] #get mol object for the scaffold into scaffold_mol
     AllChem.Compute2DCoords(scaffold_mol)
     #[AllChem.GenerateDepictionMatching2DStructure(m,scaffold_mol) for m in tmp_df.mol]
@@ -727,7 +866,7 @@ if selected == "Analyse Scaffolds":
 
     #concatenate legends
     legend_ = st.selectbox("Select legend", options=[col for col in tmp_df.columns if col != 'mol'], index=0)
-    tmp_df['legend'] = tmp_df[legend_].astype(str)
+    tmp_df.loc[:, 'legend'] = tmp_df[legend_].astype(str)
     #sort tmp_df as per descending order
     tmp_df_sort = tmp_df.sort_values(activity_col, ascending=False)
     #Draw molecules sorted as per ROCK2_log
@@ -740,18 +879,24 @@ if selected == "Analyse Scaffolds":
 #   SMILES Analysis
 ############################################################################################
 if selected == "SMILES Analysis":
-    #st.subheader("2D sketcher")
-    from streamlit_ketcher import st_ketcher
-
-    st.title("Chemical Sketcher")
-
-    # Launch the sketcher widget
-    smiles = st_ketcher()
-
-    st.subheader("SMILES Analysis")
+    st.title("🔬 SMILES Analysis")
     st.write("This page lets you input a SMILES string, visualise the 2D structure, compute some common 2D phys-chem descriptors, and alerts.")
-    st.subheader("Input the SMILES string")
-    smiles_input = st.text_input("Enter the SMILES string here", value="Cc1ccc(cc1Nc2nccc(n2)c3cccnc3)NC(=O)c4ccc(cc4)CN5CCN(CC5)C")
+    
+    # Check if user has drawn a molecule in sidebar
+    if st.session_state.get('sketched_smiles'):
+        st.success(f"✅ Molecule detected from sidebar sketcher!")
+        use_sidebar_mol = st.checkbox("Use molecule from sidebar sketcher", value=True)
+        if use_sidebar_mol:
+            smiles_input = st.session_state['sketched_smiles']
+            st.info(f"Using SMILES: `{smiles_input}`")
+        else:
+            st.subheader("Input the SMILES string")
+            smiles_input = st.text_input("Enter the SMILES string here", value="C=CC(=O)N1CCN([C@H](C1)C)c1nc(OC[C@@H]2CCCN2C)nc2c1cc(Cl)c(c2F)c1nc(N)cc(c1C(F)(F)F)C")
+    else:
+        st.subheader("Input the SMILES string")
+        st.info("💡 Tip: You can also draw a molecule using the Ketcher sketcher in the sidebar!")
+        smiles_input = st.text_input("Enter the SMILES string here", value="C=CC(=O)N1CCN([C@H](C1)C)c1nc(OC[C@@H]2CCCN2C)nc2c1cc(Cl)c(c2F)c1nc(N)cc(c1C(F)(F)F)C")
+    
     if smiles_input:
         mol = Chem.MolFromSmiles(smiles_input)
         if mol:
@@ -787,34 +932,152 @@ if selected == "SMILES Analysis":
 
                 #st.dataframe(desc_df_T, use_container_width=True)
                 st.dataframe(desc_df_T, width='content')
-            
+    
+    # Problematic-substructure detection and highlighting
+    st.markdown("### Automated structural alerts and highlights")
+    if not smiles_input or mol is None:
+        st.error("Provide a valid SMILES string to run the structural alerts.")
+    else:
+        alerts = []  # list of dicts: {"name":..., "desc":..., "atom_idxs": [...]}
+
+        # 1) Built-in RDKit filter catalogs (PAINS, REACTIVE) if available
+        try:
+            params = FilterCatalogParams()
+            params.AddCatalog(FilterCatalogParams.FilterCatalogs.ALL)
+            #params.AddCatalog(FilterCatalogParams.FilterCatalogs.REACTIVE)
+            catalog = FilterCatalog(params)
+            matches = catalog.GetMatches(mol)
+            for match in matches:
+                # best-effort extraction of atom indices for highlighting
+                atom_idxs = []
+                try:
+                    atom_idxs = list(match.GetAtomIds())  # FilterMatch method if present
+                except Exception:
+                    # fallback: try to get the SMARTS/pattern molecule and re-match
+                    try:
+                        patt = match.GetPatternMol()
+                        #st.write(f"{patt}")
+                        smatches = mol.GetSubstructMatches(patt)
+                        #st.write(f"{smatches}")
+                        if smatches:
+                            atom_idxs = list(smatches[0])
+                    except Exception:
+                        atom_idxs = []
+                alert_name = match.GetDescription() if hasattr(match, "GetDescription") else "RDKit Filter Match"
+                alerts.append({"name": f"{alert_name}", "desc": alert_name, "atom_idxs": atom_idxs})
+                #st.write(f"{atom_idxs}")
+        except Exception as e:
+            st.info("RDKit FilterCatalog unavailable or raised an error; skipping built-in filters.")
+            # continue without failing
+
+        # 2) Custom SMARTS-based structural alerts (common problematic groups)
+        custom_alerts = [
+            ("Nitro", "[NX3](=O)=O", "Possible nitro group"),
+            ("Aldehyde", "[CX3H1](=O)[#6]", "Aliphatic aldehyde"),
+            ("Acyl halide", "[CX3](=O)[Cl,Br,I,F]", "Potentially reactive acyl halide"),
+            ("Epoxide (3-membered oxygen ring)", "C1OC1", "Small strained epoxide"),
+            ("Michael acceptor (alpha,beta-unsaturated carbonyl)", "C=CC(=O)[#6]", "Electrophilic Michael acceptor"),
+            ("Free thiol", "[SH]", "Free thiol / sulfhydryl"),
+            ("Peroxide", "OO", "Peroxide moiety"),
+            ("Isocyanate", "N=C=O", "Isocyanate functional group"),
+        ]
+        for name, smarts, desc in custom_alerts:
+            try:
+                patt = Chem.MolFromSmarts(smarts)
+                if patt:
+                    matches = mol.GetSubstructMatches(patt)
+                    for m in matches:
+                        atom_idxs = list(m)
+                        alerts.append({"name": name, "desc": desc + f" ({smarts})", "atom_idxs": atom_idxs})
+            except Exception:
+                # ignore malformed SMARTS or matching errors
+                continue
+
+        # 3) Simple property-based flags (Rule-of-5 style)
+        ro5_violations = []
+        try:
+            mw = Descriptors.MolWt(mol)
+            clogp = Descriptors.MolLogP(mol)
+            hbd = Descriptors.NumHDonors(mol)
+            hba = Descriptors.NumHAcceptors(mol)
+            if mw > 500:
+                ro5_violations.append(f"Molecular weight = {mw:.1f} (>500)")
+            if clogp > 5:
+                ro5_violations.append(f"cLogP = {clogp:.2f} (>5)")
+            if hbd > 5:
+                ro5_violations.append(f"H-bond donors = {hbd} (>5)")
+            if hba > 10:
+                ro5_violations.append(f"H-bond acceptors = {hba} (>10)")
+        except Exception:
+            ro5_violations = []
+
+        # Display summary
+        if not alerts and not ro5_violations:
+            st.success("No built-in-filter or custom SMARTS alerts found; basic Ro5 metrics are OK.")
+        else:
+            if alerts:
+                st.warning(f"Found {len(alerts)} structural alert(s). Expand below to inspect and visualize them.")
+            if ro5_violations:
+                st.error("Rule-of-5 style violations detected:")
+                for v in ro5_violations:
+                    st.write(f" - {v}")
+
+        # Render each alert with highlighted structure
+        if alerts:
+            with st.expander("Show detected structural alerts and highlighted substructures", expanded=True):
+                for idx, a in enumerate(alerts, 1):
+                    title = f"{idx}. {a['name']}"
+                    st.markdown(f"**{title}** — {a.get('desc','')}")
+                    atom_idxs = a.get("atom_idxs", []) or []
+                    if atom_idxs:
+                        # determine bonds between highlighted atoms for nicer rendering
+                        bond_idxs = []
+                        for b in mol.GetBonds():
+                            a1 = b.GetBeginAtomIdx()
+                            a2 = b.GetEndAtomIdx()
+                            if a1 in atom_idxs and a2 in atom_idxs:
+                                bond_idxs.append(b.GetIdx())
+                        # Draw highlighted molecule
+                        try:
+                            img = Draw.MolToImage(mol, size=(420, 200), highlightAtoms=atom_idxs, highlightBonds=bond_idxs)
+                            st.image(img, use_column_width=False)
+                        except Exception:
+                            # fallback drawing with rdMolDraw2D
+                            try:
+                                drawer = rdMolDraw2D.MolDraw2DCairo(420, 200)
+                                opts = drawer.drawOptions()
+                                rdMolDraw2D.PrepareAndDrawMolecule(drawer, mol, highlightAtoms=atom_idxs, highlightBonds=bond_idxs)
+                                drawer.FinishDrawing()
+                                img_bytes = drawer.GetDrawingText()
+                                st.image(img_bytes)
+                            except Exception:
+                                st.info("Could not render highlighted image for this alert.")
+                    # else:
+                    #     st.info("Alert triggered, but no specific atom indices were returned to highlight.")
 
 #############################################################################
 #   R-group Analysis
 #############################################################################
-if selected == "R-group Analysis":
-    st.title("🔬 R-group Analysis")
-    st.markdown("R-group analysis is a powerful technique in medicinal chemistry that involves breaking down molecules into their core scaffolds and substituents (R-groups) to understand structure-activity relationships (SAR). This tool allows you to upload a dataset of molecules, decompose them into scaffolds and R-groups, and visualize the results.")
+if selected == "Taylor-Butina Clustering":
+    st.title("🔬 Taylor-Butina Clustering")
+    st.markdown("Taylor-Butina clustering is a widely used algorithm in cheminformatics for clustering chemical compounds based on their structural similarity. It is particularly useful for organizing large chemical libraries into smaller, more manageable groups of similar molecules.")
     st.markdown("""
     In this section, you can:
 
     - Read the input data from a CSV file
     - Cluster the input data to identify similar molecules
-    - View the largest cluster and identify the common scaffold
-    - Perform the R-group decomposition
-    - View the R-groups and their frequency
-
+    - View the largest cluster and identify representative molecules from each cluster
                 """)
     
     # Load default CSV file (local or URL)
     default_file_path = 'https://raw.githubusercontent.com/ganesh7shahane/streamlit_apps/refs/heads/main/data/chembl1075104.csv'  # adjust path or use URL
-    default_df = pd.read_csv(default_file_path)
+    default_df = pd.read_csv(default_file_path, index_col=False)
     st.subheader("Upload the CSV file")
     uploaded_file = st.file_uploader("", type=["csv"])
     
     if uploaded_file is not None:
         # Read the uploaded CSV into a pandas DataFrame
-        df = pd.read_csv(uploaded_file)
+        df = pd.read_csv(uploaded_file, index_col=False)
     else:
         df = default_df
         st.info("Using default CSV file for sample SAR analysis")
@@ -840,10 +1103,19 @@ if selected == "R-group Analysis":
     st.subheader("Perform butina clustering")
     st.write("First, we calculate molecular fingerprints and then perform butina clustering based on them. This helps identify diverse subsets or clusters of similar compounds within a dataset.")
     #Compute mol
-    df['mol'] = df.SMILES.apply(Chem.MolFromSmiles)
+    df.loc[:, 'mol'] = df[smiles_col].apply(Chem.MolFromSmiles)
     #Compute fingerprints and perform butina clustering
-    df['fp'] = df.mol.apply(uru.mol2morgan_fp)
-    df['cluster'] = uru.taylor_butina_clustering(df.fp.values)
+    # Let the user choose fingerprint parameters
+    col1, col2, col3 = st.columns(3)
+    nBits = col1.selectbox("Fingerprint size (bits)", options=[1024, 2048], index=1, help="Number of bits for the Morgan fingerprint, better to keep it 2048")
+    radius = col2.selectbox("Morgan radius", options=[1, 2, 3], index=1, help="Radius for the Morgan fingerprint, better to keep it 2")
+    sim_cutoff = col3.slider("Similarity cutoff", min_value=0.1, max_value=0.9, value=0.2, step=0.05, help="Similarity cutoff for butina clustering, lower values result in more clusters. A cutoff of 0.2 means molecules with Tanimoto similarity >= 0.8 will be clustered together. A cutoff of 0.2 is often a good starting point for diverse clustering.")
+    st.info(f"Computing Morgan fingerprints (radius={radius}, nBits={nBits})...")
+
+    # Compute Morgan fingerprints (store RDKit ExplicitBitVect objects)
+    df.loc[:, 'fp'] = df.mol.apply(lambda m: AllChem.GetMorganFingerprintAsBitVect(m, int(radius), nBits) if m is not None else None)
+    # perform Taylor-Butina clustering using the user-selected similarity cutoff
+    df.loc[:, 'cluster'] = uru.taylor_butina_clustering(df.fp.values, cutoff=float(sim_cutoff))
     
     st.write(f"Total clusters identified: {df.cluster.nunique()}")
         
@@ -851,75 +1123,101 @@ if selected == "R-group Analysis":
     st.dataframe(df.cluster.value_counts(), width='content')
      #display selectboxes side by side
      
-    st.subheader("Select a cluster and identify common scaffold")
+    st.subheader("Visualise molecules in a cluster")
 
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
     with col1:  
-        cluster_to_visualize = st.selectbox("Select a cluster", df.cluster.unique(), index=None)
+        cluster_ids = sorted(df.cluster.unique())
+        cluster_to_visualize = st.selectbox("Select a cluster", options=cluster_ids, index=0)
     with col2:
         #Choose legend from dropdown, list of columns, not mol column
         legend_option = st.selectbox("Choose legend to display:", options=[col for col in df.columns if col not in ['mol','fp','cluster']], index=0)
-    df['ID'] = df[legend_option].astype(str)
+    with col3:
+        legend_2_option = st.selectbox("Choose another legend to display (optional):", options=[col for col in df.columns if col not in ['mol','fp','cluster',legend_option]] + ["None"], index=len([col for col in df.columns if col not in ['mol','fp','cluster',legend_option]]))
+    df.loc[:, 'legend'] = df[legend_option].astype(str)
+    df.loc[:, 'legend_2'] = df[legend_2_option].astype(str) if legend_2_option != "None" else ""
+    #df.loc[:, 'legend'] = df['legend'] + " " + df['legend_2']
 
-    html_data = mols2grid.display(df.query(f"cluster == {cluster_to_visualize}"), mol_col="mol",subset=["img","ID"], size=(200, 200), n_items_per_page=16, fixedBondLength=25, clearBackground=False).data
+    html_data = mols2grid.display(df.query(f"cluster == {cluster_to_visualize}"), mol_col="mol",subset=["img","legend","legend_2"], size=(200, 200), n_items_per_page=16, fixedBondLength=25, clearBackground=False).data
         
     num_molecules = df.query(f"cluster == {cluster_to_visualize}").shape[0]
     if num_molecules >8 and num_molecules < 13:
-        st.components.v1.html(html_data, height=850, scrolling=True)
+        st.components.v1.html(html_data, height=950, scrolling=True)
     elif num_molecules <=4:
-        st.components.v1.html(html_data, height=400, scrolling=True)
+        st.components.v1.html(html_data, height=500, scrolling=True)
     elif num_molecules >4 and num_molecules <=8:
-        st.components.v1.html(html_data, height=600, scrolling=True)
+        st.components.v1.html(html_data, height=700, scrolling=True)
     else:
-        st.components.v1.html(html_data, height= 1100, scrolling=True)
+        st.components.v1.html(html_data, height= 1200, scrolling=True)
+    
+    st.write("Let's look at the dataframe with the cluster assignments")
+    st.dataframe(df)
 
-    #Text input to enter mol file
-    st.subheader("Define core or scaffold")
-    #Enter SMILES
-    smiles_inp = st.text_input("Enter SMILES of the scaffold", value="[*]C(=O)c1ccc(N[*])c(O[*])c1")
-    smiles_inp_mol = Chem.MolFromSmiles(smiles_inp)
-    AllChem.Compute2DCoords(smiles_inp_mol)
-    # Convert to MOL block string
-    mol_block = Chem.MolToMolBlock(smiles_inp_mol)
-    #Convert the mol block to mol object
-    core = Chem.MolFromMolBlock(mol_block)
-    #st.write(mol_block)
-    #mol_input = st.text_area("Enter mol file of the scaffold between triple quotes", value="\"\"\" \n\n\"\"\"")  
+    #Put a streamlit download button to download the dataframe with cluster assignments as CSV
+    compute = st.button("⬇️ Prepare DataFrame with cluster assignments as SDF",
+        type="primary"
+    )
+    if compute:
 
-    #core = Chem.MolFromMolBlock(mol_input)
-    #Display the core molecule
-    if core:
-        st.write("Here's the core molecule")
-        img = Draw.MolToImage(core, size=(300, 300), kekulize=True)
-        st.image(img, caption="Scaffold structure")
-
-        st.write(f"Now let's create a new Pandas dataframe from the molecules in cluster {cluster_to_visualize}.")
-        #Now let's create a new Pandas dataframe from the molecules in cluster 0. 
-        df_0 = df.query(f"cluster == 0").copy()
-
-        #we'll add and index column to keep track of things
-        df_0['index'] = range(0,len(df_0))
-        st.write(f"There are {len(df_0)} molecules in cluster {cluster_to_visualize}.")
-        st.dataframe(df_0, width='stretch')
+        # Create a button to download the SDF file
+        sdf_buffer = StringIO()
+        PandasTools.WriteSDF(df, sdf_buffer, molColName='mol', properties=list(df.columns), idName=None)
+        sdf_data = sdf_buffer.getvalue()
+        sdf_buffer.close()
         
-        
-        st.subheader("Perform R-group decomposition on molecules")
-        st.markdown(
-        """
-        As mentioned above, we're using the function rdRGroupDecomposition.RGroupDecompose from the RDKit. 
-        
-        Note that RDKit returns two values from this function.
-        
-        rgd - a dictionary containing the results of the R-group decomposition. This dictionary has keys containing the core with a key "Core", and the R-groups in keys named "R1", "R2", etc. Each dictionary key links to a list of cores or R-groups corresponding input molecules that matched the core (didn't fail).
-        
-        failed - a list containing the indices of molecules that did not match the core.
-        """
+        st.download_button(
+            label="⬇️ Download SDF",
+            data=sdf_data,
+            file_name="molecules_with_clusters.sdf",
+            mime="chemical/x-mdl-sdfile",
+            type="primary"
         )
-        #
         
-        rgd,failed = rdRGroupDecomposition.RGroupDecompose([core],df_0.mol.values,asRows=False)
+    
+    # #Text input to enter mol file
+    # st.subheader("Define core or scaffold")
+    # #Enter SMILES
+    # smiles_inp = st.text_input("Enter SMILES of the scaffold", value="[*]C(=O)c1ccc(N[*])c(O[*])c1")
+    # smiles_inp_mol = Chem.MolFromSmiles(smiles_inp)
+    # AllChem.Compute2DCoords(smiles_inp_mol)
+    # # Convert to MOL block string
+    # mol_block = Chem.MolToMolBlock(smiles_inp_mol)
+    # #Convert the mol block to mol object
+    # core = Chem.MolFromMolBlock(mol_block)
 
-        #rgd_core = mols2grid.display(pd.DataFrame(rgd), mol_col="Core", size=(200, 200), n_items_per_page=16, fixedBondLength=25, clearBackground=False).data
-        #st.components.v1.html(rgd_core, height=1100, scrolling=True)
-        st.write("Let's look at the first core, all the rest should be the same. ")
-        st.image(Draw.MolToImage(rgd['Core'][0], size=(300, 300), kekulize=True), caption="Core used for R-group decomposition")
+    # #Display the core molecule
+    # if core:
+    #     st.write("Here's the core molecule")
+    #     img = Draw.MolToImage(core, size=(300, 300), kekulize=True)
+    #     st.image(img, caption="Scaffold structure")
+
+    #     st.write(f"Now let's create a new Pandas dataframe from the molecules in cluster {cluster_to_visualize}.")
+    #     #Now let's create a new Pandas dataframe from the molecules in cluster 0. 
+    #     df_0 = df.query(f"cluster == 0").copy()
+
+    #     #we'll add and index column to keep track of things
+    #     df_0.loc[:, 'index'] = range(0,len(df_0))
+    #     st.write(f"There are {len(df_0)} molecules in cluster {cluster_to_visualize}.")
+    #     st.dataframe(df_0, width='stretch')
+        
+        
+    #     st.subheader("Perform R-group decomposition on molecules")
+    #     st.markdown(
+    #     """
+    #     As mentioned above, we're using the function rdRGroupDecomposition.RGroupDecompose from the RDKit. 
+        
+    #     Note that RDKit returns two values from this function.
+        
+    #     rgd - a dictionary containing the results of the R-group decomposition. This dictionary has keys containing the core with a key "Core", and the R-groups in keys named "R1", "R2", etc. Each dictionary key links to a list of cores or R-groups corresponding input molecules that matched the core (didn't fail).
+        
+    #     failed - a list containing the indices of molecules that did not match the core.
+    #     """
+    #     )
+    #     #
+        
+    #     rgd,failed = rdRGroupDecomposition.RGroupDecompose([core],df_0.mol.values,asRows=False)
+
+    #     #rgd_core = mols2grid.display(pd.DataFrame(rgd), mol_col="Core", size=(200, 200), n_items_per_page=16, fixedBondLength=25, clearBackground=False).data
+    #     #st.components.v1.html(rgd_core, height=1100, scrolling=True)
+    #     st.write("Let's look at the first core, all the rest should be the same. ")
+    #     st.image(Draw.MolToImage(rgd['Core'][0], size=(300, 300), kekulize=True), caption="Core used for R-group decomposition")

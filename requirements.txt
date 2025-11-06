@@ -1,0 +1,34 @@
+# SAR Application Requirements
+# Python dependencies for Structure-Activity Relationship analysis
+
+# Core framework
+streamlit>=1.30.0
+
+# Chemistry
+rdkit>=2023.9.1
+
+# Data processing
+pandas>=2.0.0
+numpy>=1.24.0
+
+# Visualization
+matplotlib>=3.7.0
+seaborn>=0.12.0
+plotly>=5.14.0
+mols2grid>=2.0.0
+
+# Streamlit components
+streamlit-ketcher>=0.0.2
+streamlit-option-menu>=0.3.6
+
+# Utilities
+psutil>=5.9.0
+
+# Custom dependencies
+scaffold-finder
+
+# ADMET predictions
+admetica>=1.4.1
+
+# Optional (for SA Score calculation)
+# Note: SA_Score requires manual installation from RDKit contrib
