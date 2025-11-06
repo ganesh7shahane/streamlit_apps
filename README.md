@@ -8,45 +8,45 @@ Built for: Medicinal chemists, computational chemists, and drug discovery scient
 
 # ✨ Key Features
 ## 🧪 Chemical Sketcher
-Interactive molecule drawing with Ketcher
-Draw structures directly in the browser
-Export to SMILES format for analysis
+- Interactive molecule drawing with Ketcher
+- Draw structures directly in the browser
+- Export in various formats for analysis
 
 ## 📊 DataFrame Wizard
-Upload CSV files with molecular data
-Automatic data cleaning and validation
-Statistical summaries and visualizations
-Multiple plot types (histograms, scatter, heatmaps, box plots)
-Molecular grid visualization with mols2grid
-Calculate molecular descriptors on-the-fly
-ADMET Predictions: Built-in Admetica integration for predicting:
-Absorption: Caco-2, Solubility, Lipophilicity, P-gp interactions
-Metabolism: CYP enzyme substrates and inhibitors (1A2, 2C9, 2C19, 2D6, 3A4)
-Toxicity: hERG cardiac toxicity, LD50 acute toxicity
+- Upload CSV files with molecular data
+- Automatic data cleaning and validation
+- Statistical summaries and visualizations
+- Multiple plot types (histograms, scatter, heatmaps, box plots)
+- Molecular grid visualization with mols2grid
+- Calculate molecular descriptors on-the-fly
+- ADMET Predictions: Built-in Admetica integration for predicting:
+- Absorption: Caco-2, Solubility, Lipophilicity, P-gp interactions
+- Metabolism: CYP enzyme substrates and inhibitors (1A2, 2C9, 2C19, 2D6, 3A4)
+- Toxicity: hERG cardiac toxicity, LD50 acute toxicity
 
 ## 🔬 Scaffold Hunter
-Murcko scaffold identification
-Scaffold frequency analysis
-Activity distribution per scaffold
-Interactive molecular displays
+- Murcko scaffold identification
+- Scaffold frequency analysis
+- Activity distribution per scaffold
+- Interactive molecular displays
 
 ## 🔍 SMILES Analysis
-Individual molecule deep-dive
-2D structure visualization
-Comprehensive property calculation:
-Molecular weight, LogP, TPSA, rotatable bonds
-H-bond donors/acceptors, aromatic rings
-Drug-likeness rules (Lipinski, Veber)
-QED (Quantitative Estimate of Drug-likeness)
-SA Score (Synthetic Accessibility)
-BRICS fragmentation
+- Individual molecule deep-dive
+- 2D structure visualization
+- Comprehensive property calculation:
+- Molecular weight, LogP, TPSA, rotatable bonds
+- H-bond donors/acceptors, aromatic rings
+- Drug-likeness rules (Lipinski, Veber)
+- QED (Quantitative Estimate of Drug-likeness)
+- SA Score (Synthetic Accessibility)
+- BRICS fragmentation
 
 ## 🎯 Taylor-Butina Clustering
-Structural clustering using Tanimoto distance
-Configurable fingerprint types
-Interactive cluster visualization
-Representative molecule selection
-Export cluster assignments
+- Structural clustering using Tanimoto distance
+- Configurable fingerprint types
+- Interactive cluster visualization
+- Representative molecule selection
+- Export cluster assignments
 
 # Installation
 ## 1. Clone the repository
