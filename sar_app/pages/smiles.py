@@ -57,7 +57,7 @@ class SMILESAnalyzer(BaseAnalyzer):
         # Canonical SMILES
         canonical = MoleculeUtils.mol_to_smiles(mol)
         if canonical != smiles:
-            st.info(f"📌 Canonical: `{canonical}`")
+            st.info(f"📌 Canonical SMILES: `{canonical}`")
         
         # Display sections
         self._display_structure(mol)
@@ -81,7 +81,7 @@ class SMILESAnalyzer(BaseAnalyzer):
         smiles = st.text_input(
             "Enter SMILES",
             value="[C@H]12CN(C[C@H](CC1)N2)c1c2c(nc(n1)OC[C@@]13CCCN1C[C@@H](C3)F)c(c(nc2)c1cc(cc2ccc(c(c12)C#C)F)O)F",
-            help="Aspirin by default"
+            help="KRAS inhibitor by default"
         )
         
         # Auto-run Analyse on first page load by storing the SMILES in session state
@@ -112,25 +112,23 @@ class SMILESAnalyzer(BaseAnalyzer):
             st.image(img)
         
         with col2:
-            st.markdown("### Quick Info")
-            st.metric("Formula", Chem.rdMolDescriptors.CalcMolFormula(mol))
+            st.markdown("### Lipinski Descriptors")
             st.metric("MW", f"{Descriptors.MolWt(mol):.2f} g/mol")
-            st.metric("Atoms", mol.GetNumAtoms())
-            st.metric("Bonds", mol.GetNumBonds())
+            st.metric("LogP", f"{Descriptors.MolLogP(mol):.2f}")
+            st.metric("TPSA", f"{Descriptors.TPSA(mol):.2f} Å²")
+            st.metric("HBA", Descriptors.NumHAcceptors(mol))
+            st.metric("HBD", Descriptors.NumHDonors(mol))
+            st.metric("Rotatable Bonds", Descriptors.NumRotatableBonds(mol))
     
     def _display_properties(self, mol):
         """Display molecular properties."""
         st.markdown("---")
-        st.subheader("📊 Molecular Properties")
+        st.subheader("📊 Other Properties")
         
         props = {
-            'Molecular Weight': Descriptors.MolWt(mol),
-            'LogP': Descriptors.MolLogP(mol),
-            'TPSA': Descriptors.TPSA(mol),
-            'H-Bond Donors': Descriptors.NumHDonors(mol),
-            'H-Bond Acceptors': Descriptors.NumHAcceptors(mol),
-            'Rotatable Bonds': Descriptors.NumRotatableBonds(mol),
             'Aromatic Rings': Descriptors.NumAromaticRings(mol),
+            'Aliphatic Rings': Descriptors.NumAliphaticRings(mol),
+            'Heavy Atoms': Descriptors.HeavyAtomCount(mol),
             'Fraction Csp3': Lipinski.FractionCSP3(mol),
             'Molar Refractivity': Descriptors.MolMR(mol)
         }
@@ -156,39 +154,11 @@ class SMILESAnalyzer(BaseAnalyzer):
     def _display_druglikeness(self, mol):
         """Display drug-likeness assessment."""
         st.markdown("---")
-        st.subheader("💊 Drug-Likeness")
+        st.subheader("💊 Drug-likeness Assessment")
         
         col1, col2 = st.columns(2)
         
         with col1:
-            st.markdown("#### Lipinski's Rule of Five")
-            mw = Descriptors.MolWt(mol)
-            logp = Descriptors.MolLogP(mol)
-            hbd = Descriptors.NumHDonors(mol)
-            hba = Descriptors.NumHAcceptors(mol)
-            
-            violations = 0
-            checks = [
-                ("MW ≤ 500", mw <= 500, f"{mw:.2f}"),
-                ("LogP ≤ 5", logp <= 5, f"{logp:.2f}"),
-                ("HBD ≤ 5", hbd <= 5, str(hbd)),
-                ("HBA ≤ 10", hba <= 10, str(hba))
-            ]
-            
-            for rule, passed, value in checks:
-                icon = "✅" if passed else "❌"
-                st.write(f"{icon} **{rule}**: {value}")
-                if not passed:
-                    violations += 1
-            
-            if violations <= 1:
-                st.success(f"✅ Passes Lipinski ({violations} violation)")
-            else:
-                st.error(f"❌ Fails Lipinski ({violations} violations)")
-        
-        with col2:
-            st.markdown("#### Additional Metrics")
-            
             # QED
             try:
                 from rdkit.Chem import QED
@@ -196,13 +166,14 @@ class SMILESAnalyzer(BaseAnalyzer):
                 st.metric("QED Score", f"{qed:.3f}", help="0=not drug-like, 1=very drug-like")
                 if qed >= 0.67:
                     st.success("✅ Good drug-likeness")
-                elif qed >= 0.34:
+                elif qed >= 0.4:
                     st.info("⚠️ Moderate drug-likeness")
                 else:
                     st.warning("❌ Poor drug-likeness")
             except:
-                pass
-            
+                st.info("ℹ️ QED Score unavailable")
+        
+        with col2:
             # SA Score
             if HAS_SASCORER:
                 try:
@@ -215,7 +186,7 @@ class SMILESAnalyzer(BaseAnalyzer):
                     else:
                         st.warning("❌ Difficult synthesis")
                 except:
-                    pass
+                    st.info("ℹ️ SA Score calculation failed")
             else:
                 st.info("ℹ️ SA Score unavailable (sascorer not found)")
     
