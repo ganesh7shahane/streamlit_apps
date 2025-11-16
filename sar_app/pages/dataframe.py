@@ -86,8 +86,27 @@ class DataFrameAnalyzer(BaseAnalyzer):
         with col3:
             keep_largest_fragment = st.checkbox("Keep largest fragment (remove salts/ions)", value=False)
         
+        # New row for activity conversion
+        st.markdown("")  # Add some spacing
+        col4, col5, col6 = st.columns(3)
+        
+        with col4:
+            convert_activity = st.checkbox("Convert activity (nM) to log scale", value=False)
+        
+        activity_col_selected = None
+        if convert_activity:
+            # Get numeric columns for activity selection
+            numeric_cols = DataFrameUtils.get_numeric_columns(self._df)
+            if numeric_cols:
+                with col5:
+                    activity_col_selected = st.selectbox(
+                        "Select activity column (nM)",
+                        options=numeric_cols,
+                        key="activity_col_conversion"
+                    )
+        
         # Apply cleaning operations
-        if remove_invalid or remove_duplicates or keep_largest_fragment:
+        if remove_invalid or remove_duplicates or keep_largest_fragment or convert_activity:
             original_size = len(self._df)
             
             # Keep largest fragment (remove salts)
@@ -140,6 +159,30 @@ class DataFrameAnalyzer(BaseAnalyzer):
             total_removed = original_size - len(self._df)
             if total_removed > 0:
                 st.success(f"✅ Cleaned dataset: {original_size} → {len(self._df)} molecules ({total_removed} removed)")
+        
+        # Convert activity to log scale
+        if convert_activity and activity_col_selected:
+            with st.spinner("Converting activity to log scale..."):
+                try:
+                    # Create new column name
+                    new_col_name = f"pActivity_{activity_col_selected}"
+                    
+                    # Convert nM to pActivity: pActivity = -log10(Activity_nM * 1e-9)
+                    # This is equivalent to: pActivity = 9 - log10(Activity_nM)
+                    self._df[new_col_name] = self._df[activity_col_selected].apply(
+                        lambda x: 9 - np.log10(x) if pd.notnull(x) and x > 0 else np.nan
+                    )
+                    
+                    # Count NaN values created
+                    nan_count = self._df[new_col_name].isna().sum() - self._df[activity_col_selected].isna().sum()
+                    
+                    if nan_count > 0:
+                        st.warning(f"⚠️ {nan_count} invalid/zero values converted to NaN in log scale")
+                    
+                    st.success(f"✅ Created new column '{new_col_name}' with pActivity values")
+                    st.info(f"Formula: pActivity = 9 - log10({activity_col_selected})")
+                except Exception as e:
+                    st.error(f"❌ Error converting to log scale: {str(e)}")
     
     def _display_data_preview(self):
         """Display data preview."""

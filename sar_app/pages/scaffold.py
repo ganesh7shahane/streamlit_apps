@@ -239,13 +239,26 @@ class ScaffoldAnalyzer(BaseAnalyzer):
         # Align molecules to scaffold
         AllChem.Compute2DCoords(scaffold_mol)
         
-        # Select legend column
+        # Select legend columns
         available_cols = [col for col in tmp_df.columns if col not in ['mol', 'Murcko_Scaffold']]
         if available_cols:
-            legend_col = st.selectbox("Select legend column", options=available_cols, index=0)
-            tmp_df.loc[:, 'legend'] = tmp_df[legend_col].astype(str)
+            col_a, col_b = st.columns(2)
+            with col_a:
+                legend_col1 = st.selectbox("Select first legend column", options=available_cols, index=0, key="scaffold_legend1")
+            
+            # For second selector, prefer to exclude the first selection if possible
+            available_for_second = [c for c in available_cols if c != legend_col1]
+            if not available_for_second:
+                available_for_second = available_cols
+            
+            with col_b:
+                legend_col2 = st.selectbox("Select second legend column", options=available_for_second, index=0, key="scaffold_legend2")
+            
+            tmp_df.loc[:, 'legend1'] = tmp_df[legend_col1].astype(str)
+            tmp_df.loc[:, 'legend2'] = tmp_df[legend_col2].astype(str)
         else:
-            tmp_df.loc[:, 'legend'] = tmp_df.index.astype(str)
+            tmp_df.loc[:, 'legend1'] = tmp_df.index.astype(str)
+            tmp_df.loc[:, 'legend2'] = ""
         
         # Sort by activity if available
         if activity_col and activity_col in tmp_df.columns:
@@ -258,7 +271,7 @@ class ScaffoldAnalyzer(BaseAnalyzer):
                 tmp_df,
                 mol_col='mol',
                 size=(200, 200),
-                subset=["img", "legend"],
+                subset=["img", "legend1", "legend2"],
                 n_items_per_page=16,
                 fixedBondLength=25,
                 clearBackground=False
