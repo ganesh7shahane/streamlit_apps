@@ -23,7 +23,7 @@ class ClusteringAnalyzer(BaseAnalyzer):
     
     def render(self):
         """Render the clustering page."""
-        st.title("🔗 Taylor-Butina Clustering")
+        st.title("🔗 Butina Clustering")
         
         st.markdown("""
         Cluster molecules based on structural similarity:
@@ -290,13 +290,20 @@ class ClusteringAnalyzer(BaseAnalyzer):
             key="cluster_display_slider"
             )
 
-        with col2:
-            # Give option from selectbox to choose column name as legend
-            legend_option = st.selectbox(
-            "Select Legend Display",
-            df.columns.tolist(),
-            key="cluster_legend_selectbox"
-            )
+        # Select legend columns with multiselect
+        available_legend_cols = [col for col in df.columns if col not in ['mol']]
+        default_cluster_legends = available_legend_cols[:min(2, len(available_legend_cols))]
+        
+        selected_cluster_legend_cols = st.multiselect(
+            "Choose columns to display as legends:",
+            options=available_legend_cols,
+            default=default_cluster_legends,
+            key="cluster_legend_cols"
+        )
+        
+        if not selected_cluster_legend_cols:
+            st.warning("⚠️ No legend columns selected. Please select at least one column to display.")
+            return
         
         for rank, (idx, cluster) in enumerate(sorted_clusters[:n_display], 1):
             with st.expander(f"Cluster {idx+1} (Size: {len(cluster)}, Rank: {rank})"):
@@ -310,36 +317,37 @@ class ClusteringAnalyzer(BaseAnalyzer):
                 
                 # Display using mols2grid
                 try:
-                    # Prepare display columns; format legend to 2 decimals if numeric
-                    display_cols = ['img', 'Cluster_Index']
-                    if legend_option in cluster_df.columns:
-                        def _format_legend(v):
-                            try:
-                                if pd.isna(v):
-                                    return ""
-                                return f"{float(v):.2f}"
-                            except Exception:
-                                return str(v)
-                        cluster_df['legend_display'] = cluster_df[legend_option].apply(_format_legend)
-                        display_cols.append('legend_display')
+                    # Format numeric legend columns to 2 decimal places for display
+                    cluster_df_display = cluster_df.copy()
+                    for col in selected_cluster_legend_cols:
+                        if col in cluster_df_display.columns and pd.api.types.is_numeric_dtype(cluster_df_display[col]):
+                            cluster_df_display.loc[:, col] = cluster_df_display[col].apply(
+                                lambda v: f"{v:.2f}" if pd.notnull(v) else ""
+                            )
                     
-                    # Add additional columns if available
-                    if 'MW' in cluster_df.columns:
-                        display_cols.append('MW')
-                    if 'pchembl_value' in cluster_df.columns:
-                        display_cols.append('pchembl_value')
+                    # Create tooltip with all available columns (except 'mol')
+                    tooltip_cols = [col for col in cluster_df_display.columns if col != 'mol']
+                    
+                    # Build subset list: img first, then selected legend columns
+                    subset_list = ["img"] + selected_cluster_legend_cols
                     
                     html_data = mols2grid.display(
-                        cluster_df.head(20),
+                        cluster_df_display.head(20),
                         mol_col='mol',
                         size=(200, 200),
-                        subset=display_cols,
+                        subset=subset_list,
+                        tooltip=tooltip_cols,
                         n_items_per_page=16,
                         fixedBondLength=25,
                         clearBackground=False
                     ).data
                     
-                    st.components.v1.html(html_data, height=800, scrolling=True)
+                    # Calculate dynamic height based on number of legend columns
+                    base_height = 670
+                    height_per_legend = 80
+                    dynamic_height = base_height + (len(selected_cluster_legend_cols) * height_per_legend - 10)
+                    
+                    st.components.v1.html(html_data, height=dynamic_height, scrolling=True)
                 except Exception as e:
                     st.error(f"Error displaying molecules: {str(e)}")
                     

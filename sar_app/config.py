@@ -26,9 +26,10 @@ class AppConfig:
         "DataFrame Wizard",
         "Scaffold Hunter", 
         "SMILES Analysis",
-        "Taylor-Butina Clustering"
+        "Butina Clustering",
+        "MMP Analysis"
     )
-    MENU_ICONS: Tuple[str, ...] = ("0-square", "1-square", "2-square", "3-square")
+    MENU_ICONS: Tuple[str, ...] = ("0-square", "1-square", "2-square", "3-square", "4-square")
     
     # Default Data Sources
     DEFAULT_DATAFRAME_URL: str = 'https://raw.githubusercontent.com/ganesh7shahane/useful_cheminformatics/refs/heads/main/data/FINE_TUNING_pi3k-mtor_objectives.csv'

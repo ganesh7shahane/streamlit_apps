@@ -400,33 +400,54 @@ class SMILESAnalyzer(BaseAnalyzer):
                 if frag_data:
                     df_frags = pd.DataFrame(frag_data)
                     
-                    # Display using mols2grid                    
-                    try:
-                        html_data = mols2grid.display(
-                            df_frags,
-                            mol_col='mol',
-                            subset=["img", "Fragment_ID", "SMILES"],
-                            size=(200, 200),
-                            n_items_per_page=12,
-                            fixedBondLength=25,
-                            clearBackground=False
-                        )._repr_html_()
-                        
-                        # Adjust height based on number of fragments
-                        if len(df_frags) <= 4:
-                            height = 500
-                        elif len(df_frags) <= 8:
-                            height = 700
-                        elif len(df_frags) <= 12:
-                            height = 900
-                        else:
-                            height = 1100
-                        
-                        st.components.v1.html(html_data, height=height, scrolling=True)
-                    except Exception as e:
-                        st.error(f"Error displaying fragments grid: {str(e)}")
-                        st.write("Falling back to table view:")
-                        st.dataframe(df_frags.drop(columns=['mol']), use_container_width=True)
+                    # Select legend columns with multiselect
+                    available_frag_cols = [col for col in df_frags.columns if col != 'mol']
+                    default_frag_legends = ['Fragment_ID', 'SMILES'] if all(x in available_frag_cols for x in ['Fragment_ID', 'SMILES']) else available_frag_cols[:min(2, len(available_frag_cols))]
+                    
+                    selected_frag_legend_cols = st.multiselect(
+                        "Choose columns to display as legends:",
+                        options=available_frag_cols,
+                        default=default_frag_legends,
+                        key="frag_legend_cols"
+                    )
+                    
+                    if not selected_frag_legend_cols:
+                        st.warning("⚠️ No legend columns selected. Please select at least one column to display.")
+                    else:
+                        # Display using mols2grid                    
+                        try:
+                            # Create tooltip with all available columns (except 'mol')
+                            tooltip_cols = [col for col in df_frags.columns if col != 'mol']
+                            
+                            # Build subset list: img first, then selected legend columns
+                            subset_list = ["img"] + selected_frag_legend_cols
+                            
+                            html_data = mols2grid.display(
+                                df_frags,
+                                mol_col='mol',
+                                subset=subset_list,
+                                tooltip=tooltip_cols,
+                                size=(200, 200),
+                                n_items_per_page=12,
+                                fixedBondLength=25,
+                                clearBackground=False
+                            )._repr_html_()
+                            
+                            # Adjust height based on number of fragments
+                            if len(df_frags) <= 4:
+                                height = 500
+                            elif len(df_frags) <= 8:
+                                height = 700
+                            elif len(df_frags) <= 12:
+                                height = 900
+                            else:
+                                height = 1100
+                            
+                            st.components.v1.html(html_data, height=height, scrolling=True)
+                        except Exception as e:
+                            st.error(f"Error displaying fragments grid: {str(e)}")
+                            st.write("Falling back to table view:")
+                            st.dataframe(df_frags.drop(columns=['mol']), use_container_width=True)
                 else:
                     st.warning("No valid fragments could be generated")
             else:

@@ -14,7 +14,8 @@ from sar_app.pages import (
     SMILESAnalyzer,
     ClusteringAnalyzer,
     KetcherAnalyzer,
-    ADMETDocsAnalyzer
+    ADMETDocsAnalyzer,
+    MMPAnalyzer
 )
 from sar_app.utils import MemoryUtils
 
@@ -88,15 +89,19 @@ class SARApplication:
             default_index=current_index,
             orientation="horizontal",
             styles={
-                "container": {"padding": "0!important", "background-color": "#f8fae1"},
-                "icon": {"color": "red", "font-size": "20px"},
-                "nav-link": {
-                    "font-size": "16px",
-                    "text-align": "center",
-                    "margin": "0px",
-                    "--hover-color": "#eee",
-                },
-                "nav-link-selected": {"background-color": "darkgreen"},
+            "container": {"padding": "0!important", "background-color": "#f8fae1"},
+            "icon": {"color": "red", "font-size": "20px"},
+            "nav-link": {
+                "font-size": "16px",
+                "text-align": "center",
+                "margin": "0px",
+                "color": "#000000",  # Font color for unselected items
+                "--hover-color": "#eee",
+            },
+            "nav-link-selected": {
+                "background-color": "darkgreen",
+                "color": "#ffffff"  # Font color for selected item
+            },
             }
         )
         
@@ -122,7 +127,8 @@ class SARApplication:
             "DataFrame Wizard": DataFrameAnalyzer,
             "Scaffold Hunter": ScaffoldAnalyzer,
             "SMILES Analysis": SMILESAnalyzer,
-            "Taylor-Butina Clustering": ClusteringAnalyzer,
+            "Butina Clustering": ClusteringAnalyzer,
+            "MMP Analysis": MMPAnalyzer,
             "ADMET Documentation": ADMETDocsAnalyzer
         }
         

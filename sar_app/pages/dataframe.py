@@ -59,12 +59,12 @@ class DataFrameAnalyzer(BaseAnalyzer):
     def _display_intro(self):
         """Display page introduction."""
         st.markdown("""
-        Analyze CSV files containing SMILES and their properties:
+        Clean and analyze CSV files containing SMILES and their properties:
         - :red[View & Clean] the DataFrame
         - :red[Compute] statistics on numerical columns
         - :red[Plot] histograms, barplots, correlation heatmaps
         - :red[Visualise] 2D molecular structures
-        - :red[Calculate] RDKit descriptors and fingerprints
+        - :red[Calculate] physchem descriptors, fingerprints & ADMET properties
         """)
     
     def _data_cleaning_section(self):
@@ -193,8 +193,11 @@ class DataFrameAnalyzer(BaseAnalyzer):
         max_rows = min(100, current_df_length)
         default_rows = min(5, current_df_length)
         
-        rows = st.slider("Rows to display", 3, current_df_length, default_rows, key="preview_rows_slider")
-        st.dataframe(self._df.head(rows), use_container_width=True)
+        rows = st.slider("Rows to display", 3, max_rows, default_rows, key="preview_rows_slider")
+        
+        # Display the dataframe directly without molecule rendering
+        preview_df = self._df.head(rows)
+        st.dataframe(preview_df, use_container_width=True)
         st.info(f"📊 Total: {current_df_length} molecules, {len(self._df.columns)} columns")
     
     def _display_statistics(self):
@@ -244,7 +247,7 @@ class DataFrameAnalyzer(BaseAnalyzer):
     
     def _plot_multiple_histograms(self, numeric_cols):
         """Plot multiple histograms."""
-        with st.expander("Multiple Histograms"):
+        with st.expander("Multi-Histogram Plot"):
             selected_cols = st.multiselect(
                 "Select columns", numeric_cols, default=numeric_cols[:min(6, len(numeric_cols))]
             )
@@ -497,32 +500,27 @@ class DataFrameAnalyzer(BaseAnalyzer):
             display_df = filtered_df.copy()
             st.info(f"Displaying {len(display_df)} filtered molecules")
         
-        # Select legend columns (side by side)
+        # Select legend columns with multiselect
         available_cols = [col for col in display_df.columns if col != 'mol']
-        col_a, col_b = st.columns(2)
-        with col_a:
-            legend_col = st.selectbox(
-            "Choose first legend to display:",
+        
+        # Default to first two columns if available
+        default_legends = available_cols[:min(2, len(available_cols))]
+        
+        selected_legend_cols = st.multiselect(
+            "Choose columns to display as legends:",
             options=available_cols,
-            index=0,
-            key="mol_legend_col1"
-            )
-        # For the second selector, prefer to exclude the first selection if possible
-        available_for_second = [c for c in available_cols if c != legend_col]
-        if not available_for_second:
-            available_for_second = available_cols
-        with col_b:
-            legend_col2 = st.selectbox(
-            "Choose second legend to display:",
-            options=available_for_second,
-            index=0,
-            key="mol_legend_col2"
-            )
+            default=default_legends,
+            key="mol_legend_cols"
+        )
+        
+        if not selected_legend_cols:
+            st.warning("⚠️ No legend columns selected. Please select at least one column to display.")
+            return
         
         # Generate molecular grid
         with st.spinner("Generating molecular structures..."):
             display_df.loc[:, 'mol'] = display_df[self.smiles_col].apply(
-                lambda x: MoleculeUtils.smiles_to_mol(x)
+            lambda x: MoleculeUtils.smiles_to_mol(x)
             )
             
             # Do not limit molecules — display all
@@ -531,22 +529,36 @@ class DataFrameAnalyzer(BaseAnalyzer):
         try:
             # Format numeric legend columns to 2 decimal places for display
             df_for_display = display_df_limited.copy()
-            for col in (legend_col, legend_col2):
+            for col in selected_legend_cols:
                 if col in df_for_display.columns and pd.api.types.is_numeric_dtype(df_for_display[col]):
                     df_for_display.loc[:, col] = df_for_display[col].apply(
                         lambda v: f"{v:.2f}" if pd.notnull(v) else ""
                     )
 
+            # Create tooltip with all available columns (except 'mol' and 'img')
+            tooltip_cols = [col for col in df_for_display.columns if col not in ['mol', 'img']]
+            
+            # Build subset list: img first, then selected legend columns
+            subset_list = ["img"] + selected_legend_cols
+            
             raw_html = mols2grid.display(
                 df_for_display,
-                subset=["img", legend_col, legend_col2],
+                subset=subset_list,
+                tooltip=tooltip_cols,
                 mol_col='mol',
                 size=self.config.MOL_GRID_SIZE,
                 n_items_per_page=self.config.MOL_ITEMS_PER_PAGE,
                 fixedBondLength=25,
                 clearBackground=False
             )._repr_html_()
-            st.components.v1.html(raw_html, height=800, scrolling=True)
+            
+            # Calculate dynamic height based on number of legend columns
+            # Base height + extra height per legend column
+            base_height = 670
+            height_per_legend = 80  # pixels per legend column
+            dynamic_height = base_height + (len(selected_legend_cols) * height_per_legend - 10)
+            
+            st.components.v1.html(raw_html, height=dynamic_height, scrolling=True)
         except Exception as e:
             st.error(f"Error displaying molecules: {str(e)}")
     

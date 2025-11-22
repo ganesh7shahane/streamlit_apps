@@ -94,18 +94,46 @@ class ScaffoldAnalyzer(BaseAnalyzer):
             # Visualize scaffolds
             with st.expander("Scaffold Structures", expanded=True):
                 n_display = st.slider("Scaffolds to display", 5, len(scaffold_counts), 20, key="scaffold_display")
-                st.info("Scaffold ID and their counts are displayed as legends")
+                
                 display_df = scaffold_counts.head(n_display).copy()
                 display_df.loc[:, 'ID'] = [f"S{i}" for i in range(len(display_df))]
                 
+                # Select legend columns with multiselect
+                available_cols = [col for col in display_df.columns if col != 'mol']
+                default_legends = ['ID', 'count'] if 'count' in available_cols else available_cols[:min(2, len(available_cols))]
+                
+                selected_legend_cols = st.multiselect(
+                    "Choose columns to display as legends:",
+                    options=available_cols,
+                    default=default_legends,
+                    key="scaffold_legend_cols"
+                )
+                
+                if not selected_legend_cols:
+                    st.warning("⚠️ No legend columns selected. Please select at least one column to display.")
+                    return
+                
                 try:
+                    # Create tooltip with all available columns (except 'mol')
+                    tooltip_cols = [col for col in display_df.columns if col != 'mol']
+                    
+                    # Build subset list: img first, then selected legend columns
+                    subset_list = ["img"] + selected_legend_cols
+                    
                     raw_html = mols2grid.display(
                         display_df,
-                        subset=["img", "ID", "count"],
+                        subset=subset_list,
+                        tooltip=tooltip_cols,
                         mol_col='mol',
                         size=(150, 150)
                     )._repr_html_()
-                    st.components.v1.html(raw_html, height=950, scrolling=True)
+                    
+                    # Calculate dynamic height based on number of legend columns
+                    base_height = 800
+                    height_per_legend = 80
+                    dynamic_height = base_height + (len(selected_legend_cols) * height_per_legend - 10)
+                    
+                    st.components.v1.html(raw_html, height=dynamic_height, scrolling=True)
                 except Exception as e:
                     st.error(f"Error displaying scaffolds: {str(e)}")
             
@@ -115,14 +143,20 @@ class ScaffoldAnalyzer(BaseAnalyzer):
             
             numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
             if numeric_cols:
-                activity_col = st.selectbox(
-                    ":green[Select] the activity column from the dataframe",
-                    options=numeric_cols,
-                    index=0
-                )
+                col1, col2 = st.columns([2, 1])
+                
+                with col1:
+                    activity_col = st.selectbox(
+                        ":green[Select] the activity column from the dataframe",
+                        options=numeric_cols,
+                        index=0
+                    )
+                
+                with col2:
+                    boxplot_color = st.color_picker("Boxplot color", "#1f77b4", key="scaffold_boxplot_color")
                 
                 if activity_col:
-                    self._display_scaffold_activity_distribution(df, scaffold_counts, activity_col)
+                    self._display_scaffold_activity_distribution(df, scaffold_counts, activity_col, boxplot_color)
             else:
                 st.info("No numeric columns found for activity analysis")
             
@@ -160,7 +194,7 @@ class ScaffoldAnalyzer(BaseAnalyzer):
         
         st.rerun()
     
-    def _display_scaffold_activity_distribution(self, df, scaffold_counts, activity_col):
+    def _display_scaffold_activity_distribution(self, df, scaffold_counts, activity_col, boxplot_color="#1f77b4"):
         """Display boxplots showing activity distribution for each scaffold."""
         # Check for NaN values in activity column
         if df[activity_col].isna().sum() > 0:
@@ -176,7 +210,7 @@ class ScaffoldAnalyzer(BaseAnalyzer):
             plt.figure(dpi=150)
             sns.set(rc={'figure.figsize': (4, 1)})
             sns.set_style('whitegrid')
-            ax = sns.boxplot(x=dist)
+            ax = sns.boxplot(x=dist, color=boxplot_color)
             ax.set_xlim(x_lim[0], x_lim[1])
             # label x-axis with the chosen activity column
             try:
@@ -239,26 +273,20 @@ class ScaffoldAnalyzer(BaseAnalyzer):
         # Align molecules to scaffold
         AllChem.Compute2DCoords(scaffold_mol)
         
-        # Select legend columns
+        # Select legend columns with multiselect
         available_cols = [col for col in tmp_df.columns if col not in ['mol', 'Murcko_Scaffold']]
-        if available_cols:
-            col_a, col_b = st.columns(2)
-            with col_a:
-                legend_col1 = st.selectbox("Select first legend column", options=available_cols, index=0, key="scaffold_legend1")
-            
-            # For second selector, prefer to exclude the first selection if possible
-            available_for_second = [c for c in available_cols if c != legend_col1]
-            if not available_for_second:
-                available_for_second = available_cols
-            
-            with col_b:
-                legend_col2 = st.selectbox("Select second legend column", options=available_for_second, index=0, key="scaffold_legend2")
-            
-            tmp_df.loc[:, 'legend1'] = tmp_df[legend_col1].astype(str)
-            tmp_df.loc[:, 'legend2'] = tmp_df[legend_col2].astype(str)
-        else:
-            tmp_df.loc[:, 'legend1'] = tmp_df.index.astype(str)
-            tmp_df.loc[:, 'legend2'] = ""
+        default_legends = available_cols[:min(2, len(available_cols))]
+        
+        selected_legend_cols = st.multiselect(
+            "Choose columns to display as legends:",
+            options=available_cols,
+            default=default_legends,
+            key="scaffold_mol_legend_cols"
+        )
+        
+        if not selected_legend_cols:
+            st.warning("⚠️ No legend columns selected. Please select at least one column to display.")
+            return
         
         # Sort by activity if available
         if activity_col and activity_col in tmp_df.columns:
@@ -267,15 +295,28 @@ class ScaffoldAnalyzer(BaseAnalyzer):
         st.write(f"📌 There are {len(tmp_df)} molecules with scaffold ID {scaffold_id}")
         
         try:
+            # Create tooltip with all available columns (except 'mol')
+            tooltip_cols = [col for col in tmp_df.columns if col != 'mol']
+            
+            # Build subset list: img first, then selected legend columns
+            subset_list = ["img"] + selected_legend_cols
+            
             html_data = mols2grid.display(
                 tmp_df,
                 mol_col='mol',
                 size=(200, 200),
-                subset=["img", "legend1", "legend2"],
+                subset=subset_list,
+                tooltip=tooltip_cols,
                 n_items_per_page=16,
                 fixedBondLength=25,
                 clearBackground=False
             ).data
-            st.components.v1.html(html_data, height=800, scrolling=True)
+            
+            # Calculate dynamic height based on number of legend columns
+            base_height = 800
+            height_per_legend = 80
+            dynamic_height = base_height + (len(selected_legend_cols) * height_per_legend - 10)
+            
+            st.components.v1.html(html_data, height=dynamic_height, scrolling=True)
         except Exception as e:
             st.error(f"Error displaying molecules: {str(e)}")
