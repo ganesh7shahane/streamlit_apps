@@ -66,7 +66,7 @@ class KetcherAnalyzer(BaseAnalyzer):
         st.subheader("Generated SMILES:")
         st.code(smiles, language="text")
         
-        if st.button("📋 Copy SMILES", use_container_width=True):
+        if st.button("📋 Copy SMILES", width='stretch'):
             st.toast("SMILES copied to clipboard!", icon="✅")
         
         # Quick properties
@@ -121,7 +121,7 @@ class KetcherAnalyzer(BaseAnalyzer):
                     st.write("**2D Structure:**")
                     img = MoleculeUtils.mol_to_image(mol, size=(1000, 1000))
                     if img:
-                        st.image(img, use_container_width=True)
+                        st.image(img, width='stretch')
             
             # Lipinski's Rule of Five
             with st.expander("Lipinski's Rule of Five"):
@@ -199,6 +199,6 @@ class KetcherAnalyzer(BaseAnalyzer):
         
         # Back button at the bottom
         st.markdown("---")
-        if st.button("← Back to Main", type="secondary", use_container_width=True):
+        if st.button("← Back to Main", type="secondary", width='stretch'):
             st.session_state.current_page = "DataFrame Wizard"
             st.rerun()

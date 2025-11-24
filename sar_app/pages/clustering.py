@@ -7,7 +7,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from rdkit import Chem, DataStructs
-from rdkit.Chem import AllChem, Draw
+from rdkit.Chem import AllChem, Draw, rdRGroupDecomposition
 from rdkit.ML.Cluster import Butina
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -23,7 +23,7 @@ class ClusteringAnalyzer(BaseAnalyzer):
     
     def render(self):
         """Render the clustering page."""
-        st.title("🔗 Butina Clustering")
+        st.title("🔗 Butina Clustering & R-Group Decomposition")
         
         st.markdown("""
         Cluster molecules based on structural similarity:
@@ -31,6 +31,7 @@ class ClusteringAnalyzer(BaseAnalyzer):
         - :red[Calculate] distance matrix
         - :red[Cluster] using Butina algorithm
         - :red[Visualize] clusters and representatives
+        - :red[Perform] R-group decomposition based on selected scaffold
         """)
         
         # File upload
@@ -53,7 +54,7 @@ class ClusteringAnalyzer(BaseAnalyzer):
                 step=1,
                 key="clustering_preview_rows"
             )
-            st.dataframe(self.df.head(n_rows), use_container_width=True)
+            st.dataframe(self.df.head(n_rows), width='stretch')
             st.info(f"Total rows in dataset: {len(self.df)}")
         
         # Configuration
@@ -313,7 +314,7 @@ class ClusteringAnalyzer(BaseAnalyzer):
                 cluster_df.loc[:, 'Cluster_Index'] = [cluster[i] for i in range(len(cluster))]
                 cluster_df.loc[:, 'Is_Representative'] = ['Yes' if i == 0 else 'No' for i in range(len(cluster))]
                 
-                st.write(f"📌 Showing {min(len(cluster), 20)} of {len(cluster)} molecules")
+                #st.write(f"📌 Showing all molecules")
                 
                 # Display using mols2grid
                 try:
@@ -332,12 +333,12 @@ class ClusteringAnalyzer(BaseAnalyzer):
                     subset_list = ["img"] + selected_cluster_legend_cols
                     
                     html_data = mols2grid.display(
-                        cluster_df_display.head(20),
+                        cluster_df_display,
                         mol_col='mol',
                         size=(200, 200),
                         subset=subset_list,
                         tooltip=tooltip_cols,
-                        n_items_per_page=16,
+                        n_items_per_page=18,
                         fixedBondLength=25,
                         clearBackground=False
                     ).data
@@ -358,4 +359,251 @@ class ClusteringAnalyzer(BaseAnalyzer):
                     if 'pchembl_value' in cluster_df.columns:
                         display_df_cols.append('pchembl_value')
                     
-                    st.dataframe(cluster_df[display_df_cols].head(20), hide_index=False)
+                    st.dataframe(cluster_df[display_df_cols], hide_index=False)
+        
+        # R-group table section
+        self._display_rgroup_table(results, df)
+    
+    def _display_rgroup_table(self, results: dict, df: pd.DataFrame):
+        """Display R-group decomposition table for selected cluster."""
+        st.markdown("---")
+        st.subheader("🧪 R-group Table Analysis")
+        
+        st.markdown("""
+        Perform R-group decomposition on a selected cluster:
+        - Enter a scaffold/core SMILES structure
+        - Select a cluster to analyze
+        - View R-group substitutions and their frequencies
+        """)
+        
+        clusters = results['clusters']
+        smiles_col = self.smiles_col
+        
+        # Sort clusters by size
+        sorted_clusters = sorted(enumerate(clusters), key=lambda x: len(x[1]), reverse=True)
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # Text area for core SMILES input
+            core_smiles = st.text_area(
+                "Enter Core/Scaffold SMILES with R-groups",
+                value="[*]C(=O)c1ccc(N[*])c(O[*])c1",
+                height=100,
+                help="Use [*] to indicate attachment points for R-groups"
+            )
+        
+        with col2:
+            # Dropdown to select cluster
+            cluster_options = [f"Cluster {idx+1} (Size: {len(cluster)})" 
+                             for idx, cluster in sorted_clusters]
+            selected_cluster_idx = st.selectbox(
+                "Select Cluster for R-group Analysis",
+                range(len(cluster_options)),
+                format_func=lambda x: cluster_options[x]
+            )
+        
+        # Display core structure
+        if core_smiles:
+            try:
+                core_mol = Chem.MolFromSmiles(core_smiles)
+                if core_mol:
+                    st.markdown("**Core Structure:**")
+                    col_img1, col_img2 = st.columns([1, 2])
+                    with col_img1:
+                        st.image(Draw.MolToImage(core_mol, size=(250, 250)))
+                    with col_img2:
+                        # Show molblock
+                        molblock = Chem.MolToMolBlock(core_mol)
+                        with st.expander("View MolBlock"):
+                            st.code(molblock, language="text")
+                else:
+                    st.error("Invalid SMILES. Please enter a valid structure.")
+                    return
+            except Exception as e:
+                st.error(f"Error parsing SMILES: {str(e)}")
+                return
+        else:
+            st.info("Enter a core SMILES to begin analysis")
+            return
+        
+        # Button to perform R-group decomposition
+        if st.button("🚀 Perform R-group Decomposition", type="primary"):
+            try:
+                # Get selected cluster
+                cluster_idx, cluster = sorted_clusters[selected_cluster_idx]
+                cluster_df = df.iloc[list(cluster)].copy()
+                cluster_df.loc[:, 'mol'] = cluster_df[smiles_col].apply(Chem.MolFromSmiles)
+                cluster_df.loc[:, 'index'] = range(len(cluster_df))
+                
+                st.info(f"Analyzing {len(cluster_df)} molecules from Cluster {cluster_idx+1}")
+                
+                # Perform R-group decomposition
+                with st.spinner("Performing R-group decomposition..."):
+                    rgd, failed = rdRGroupDecomposition.RGroupDecompose(
+                        [core_mol], 
+                        cluster_df['mol'].values,
+                        asRows=False
+                    )
+                
+                # Store results in session state
+                st.session_state['rgd_results'] = {
+                    'rgd': rgd,
+                    'failed': failed,
+                    'cluster_df': cluster_df,
+                    'cluster_idx': cluster_idx
+                }
+                
+            except Exception as e:
+                st.error(f"Error during R-group decomposition: {str(e)}")
+                import traceback
+                with st.expander("Error details"):
+                    st.code(traceback.format_exc())
+                return
+        
+        # Display R-group results if available
+        if 'rgd_results' in st.session_state:
+            self._display_rgroup_results(st.session_state['rgd_results'])
+    
+    def _display_rgroup_results(self, rgd_results: dict):
+        """Display R-group decomposition results."""
+        rgd = rgd_results['rgd']
+        failed = rgd_results['failed']
+        cluster_df = rgd_results['cluster_df']
+        cluster_idx = rgd_results['cluster_idx']
+        
+        st.markdown("---")
+        st.subheader("📊 R-group Decomposition Results")
+        
+        # Show decomposition summary
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Total Molecules", len(cluster_df))
+        with col2:
+            st.metric("Successfully Decomposed", len(cluster_df) - len(failed))
+        with col3:
+            st.metric("Failed", len(failed))
+        
+        # Display the core with R-groups
+        if 'Core' in rgd:
+            st.markdown("**Identified Core with R-groups:**")
+            core_with_rgroups = rgd['Core'][0]
+            col_core1, col_core2 = st.columns([1, 2])
+            with col_core1:
+                st.image(Draw.MolToImage(core_with_rgroups, size=(300, 300)))
+            with col_core2:
+                st.info(f"The R-group decomposition identified {len([k for k in rgd.keys() if k != 'Core'])} R-group positions")
+        
+        # Show failed molecules if any
+        if failed:
+            with st.expander(f"⚠️ Failed Molecules ({len(failed)})"):
+                st.markdown("These molecules did not match the core structure:")
+                # Use iloc to get failed molecules by position
+                failed_df = cluster_df.iloc[failed].copy()
+                
+                try:
+                    failed_html = mols2grid.display(
+                        failed_df,
+                        mol_col='mol',
+                        subset=['img', 'index'],
+                        size=(150, 150)
+                    )._repr_html_()
+                    st.components.v1.html(failed_html, height=400, scrolling=True)
+                except:
+                    st.dataframe(failed_df[[self.smiles_col, 'index']])
+        
+        # Get R-group names
+        r_groups = sorted([x for x in rgd.keys() if x != "Core"])
+        
+        if not r_groups:
+            st.warning("No R-groups found in the decomposition")
+            return
+        
+        st.markdown(f"**Found R-groups:** {', '.join(r_groups)}")
+        
+        # Add R-group SMILES to dataframe BEFORE removing failed molecules
+        # Ensure the R-group data matches the cluster_df length
+        for r in r_groups:
+            # Pad or truncate R-group data to match cluster_df length
+            rgroup_data = rgd[r]
+            if len(rgroup_data) < len(cluster_df):
+                # Pad with None if needed
+                rgroup_data = list(rgroup_data) + [None] * (len(cluster_df) - len(rgroup_data))
+            elif len(rgroup_data) > len(cluster_df):
+                # Truncate if needed
+                rgroup_data = rgroup_data[:len(cluster_df)]
+            
+            cluster_df.loc[:, r] = rgroup_data
+            # Convert to SMILES, handling None values for failed molecules
+            cluster_df.loc[:, r] = cluster_df[r].apply(
+                lambda x: Chem.MolToSmiles(x) if x is not None else None
+            )
+        
+        # Now remove failed molecules from cluster_df
+        if failed:
+            # Get the indices we want to keep (all except failed)
+            keep_indices = [i for i in range(len(cluster_df)) if i not in failed]
+            cluster_df = cluster_df.iloc[keep_indices].reset_index(drop=True)
+            # Remove None values from R-group columns
+            for r in r_groups:
+                cluster_df = cluster_df[cluster_df[r].notna()]
+        
+        # Display R-group frequency tables
+        st.markdown("---")
+        st.subheader("📈 R-group Frequencies")
+        
+        # Create tabs for each R-group
+        tabs = st.tabs(r_groups)
+        
+        for tab, rg in zip(tabs, r_groups):
+            with tab:
+                # Count frequencies
+                value_counts = cluster_df[rg].value_counts().reset_index()
+                value_counts.columns = [rg, 'count']
+                
+                # Add molecule column
+                value_counts['mol'] = value_counts[rg].apply(Chem.MolFromSmiles)
+                
+                st.markdown(f"**{rg} - {len(value_counts)} unique substituents**")
+                
+                col_table, col_viz = st.columns([1, 2])
+                
+                with col_table:
+                    # Display frequency table
+                    display_df = value_counts[[rg, 'count']].copy()
+                    st.dataframe(display_df, hide_index=True, height=400)
+                
+                with col_viz:
+                    # Display molecules using mols2grid
+                    try:
+                        grid_html = mols2grid.display(
+                            value_counts,
+                            mol_col='mol',
+                            smiles_col=rg,
+                            subset=['img', 'count'],
+                            size=(150, 150),
+                            n_items_per_page=12
+                        )._repr_html_()
+                        st.components.v1.html(grid_html, height=800, scrolling=True)
+                    except Exception as e:
+                        st.error(f"Error displaying R-group structures: {str(e)}")
+        
+        # Download option for R-group table
+        st.markdown("---")
+        st.subheader("💾 Download R-group Table")
+        
+        # Prepare download dataframe
+        download_cols = [self.smiles_col] + r_groups
+        if 'Name' in cluster_df.columns:
+            download_cols.insert(0, 'Name')
+        
+        available_download_cols = [col for col in download_cols if col in cluster_df.columns]
+        download_df = cluster_df[available_download_cols]
+        
+        csv = download_df.to_csv(index=False)
+        st.download_button(
+            label="📥 Download R-group Table (CSV)",
+            data=csv,
+            file_name=f"rgroup_table_cluster_{cluster_idx+1}.csv",
+            mime="text/csv"
+        )

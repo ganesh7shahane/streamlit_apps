@@ -197,7 +197,7 @@ class DataFrameAnalyzer(BaseAnalyzer):
         
         # Display the dataframe directly without molecule rendering
         preview_df = self._df.head(rows)
-        st.dataframe(preview_df, use_container_width=True)
+        st.dataframe(preview_df, width='stretch')
         st.info(f"📊 Total: {current_df_length} molecules, {len(self._df.columns)} columns")
     
     def _display_statistics(self):
@@ -214,11 +214,11 @@ class DataFrameAnalyzer(BaseAnalyzer):
         with st.expander("NaN Analysis"):
             nan_df = self._df.isna().sum().reset_index()
             nan_df.columns = ['Column', 'NaN Count']
-            st.dataframe(nan_df, use_container_width=True)
+            st.dataframe(nan_df, width='stretch')
         
         # Descriptive stats
         with st.expander("Descriptive Statistics", expanded=True):
-            st.dataframe(self._df[numeric_cols].describe(), use_container_width=True)
+            st.dataframe(self._df[numeric_cols].describe(), width='stretch')
     
     def _visualisation_section(self):
         """Handle all visualisation options."""
@@ -428,7 +428,7 @@ class DataFrameAnalyzer(BaseAnalyzer):
                 self._df, x=x_col, y=y_col, color=color_col,
                 hover_data=[self._df.index], trendline="ols"
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
     
     def _molecular_grid_section(self):
         """Display molecular grid with filtering options."""
@@ -864,7 +864,7 @@ class DataFrameAnalyzer(BaseAnalyzer):
                     result_df = self._calculate_toxicity_properties(result_df)
                 
                 st.success(f"✅ Calculated! Shape: {result_df.shape}")
-                st.dataframe(result_df, use_container_width=True)
+                st.dataframe(result_df, width='stretch')
                 
                 # Download button
                 sdf_buffer = StringIO()

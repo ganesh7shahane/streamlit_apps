@@ -55,7 +55,7 @@ class ScaffoldAnalyzer(BaseAnalyzer):
                 step=1,
                 key="scaffold_preview_rows"
             )
-            st.dataframe(self._df.head(n_rows), use_container_width=True)
+            st.dataframe(self._df.head(n_rows), width='stretch')
             st.info(f"Total rows in dataset: {len(self._df)}")
         
         if st.button("🔍 Find Scaffolds", type="primary"):
@@ -307,7 +307,7 @@ class ScaffoldAnalyzer(BaseAnalyzer):
                 size=(200, 200),
                 subset=subset_list,
                 tooltip=tooltip_cols,
-                n_items_per_page=16,
+                n_items_per_page=18,
                 fixedBondLength=25,
                 clearBackground=False
             ).data

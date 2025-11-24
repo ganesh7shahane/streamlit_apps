@@ -350,7 +350,7 @@ class SMILESAnalyzer(BaseAnalyzer):
                                 st.metric("LD50 (Acute)", str(ld50_val))
                     
                     # Link to ADMET Documentation
-                    if st.button("📖 View ADMET Documentation", type="secondary", use_container_width=True):
+                    if st.button("📖 View ADMET Documentation", type="secondary", width='stretch'):
                         st.session_state.current_page = "ADMET Documentation"
                         st.rerun()
                 else:
@@ -447,7 +447,7 @@ class SMILESAnalyzer(BaseAnalyzer):
                         except Exception as e:
                             st.error(f"Error displaying fragments grid: {str(e)}")
                             st.write("Falling back to table view:")
-                            st.dataframe(df_frags.drop(columns=['mol']), use_container_width=True)
+                            st.dataframe(df_frags.drop(columns=['mol']), width='stretch')
                 else:
                     st.warning("No valid fragments could be generated")
             else:
