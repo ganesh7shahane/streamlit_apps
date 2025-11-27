@@ -506,9 +506,10 @@ class ClusteringAnalyzer(BaseAnalyzer):
                         failed_df,
                         mol_col='mol',
                         subset=['img', 'index'],
+                        n_items_per_page=18,
                         size=(150, 150)
                     )._repr_html_()
-                    st.components.v1.html(failed_html, height=400, scrolling=True)
+                    st.components.v1.html(failed_html, height=700, scrolling=True)
                 except:
                     st.dataframe(failed_df[[self.smiles_col, 'index']])
         

@@ -12,7 +12,7 @@ import mols2grid
 import base64
 import io
 from rdkit import Chem
-from rdkit.Chem import AllChem, Draw
+from rdkit.Chem import AllChem, Draw, rdDepictor
 from rdkit.Chem.Draw import rdMolDraw2D
 from rdkit.Chem.Scaffolds import MurckoScaffold
 from IPython.display import HTML
@@ -268,10 +268,30 @@ class ScaffoldAnalyzer(BaseAnalyzer):
         
         # Get molecules with this scaffold
         tmp_df = df.query("Murcko_Scaffold == @scaffold_smi").copy()
-        tmp_df.loc[:, 'mol'] = tmp_df[self.smiles_col].apply(Chem.MolFromSmiles)
         
-        # Align molecules to scaffold
-        AllChem.Compute2DCoords(scaffold_mol)
+        # Align molecules to scaffold using GenerateDepictionMatching2DStructure
+        # First cleanup and prepare the scaffold
+        rdDepictor.Compute2DCoords(scaffold_mol)
+        rdDepictor.SetPreferCoordGen(True)
+        
+        # Generate aligned 2D coordinates for all molecules and store them
+        aligned_mols = []
+        for smiles in tmp_df[self.smiles_col]:
+            mol = Chem.MolFromSmiles(smiles)
+            if mol is not None:
+                try:
+                    rdDepictor.Compute2DCoords(mol)
+                    AllChem.GenerateDepictionMatching2DStructure(mol, scaffold_mol)
+                    aligned_mols.append(mol)
+                except:
+                    # If alignment fails, use default 2D coordinates
+                    rdDepictor.Compute2DCoords(mol)
+                    aligned_mols.append(mol)
+            else:
+                aligned_mols.append(None)
+        
+        # Store aligned molecules in dataframe
+        tmp_df.loc[:, 'mol'] = aligned_mols
         
         # Select legend columns with multiselect
         available_cols = [col for col in tmp_df.columns if col not in ['mol', 'Murcko_Scaffold']]
