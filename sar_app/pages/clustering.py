@@ -33,7 +33,7 @@ class ClusteringAnalyzer(BaseAnalyzer):
         - :red[Visualize] clusters and representatives
         - :red[Perform] R-group decomposition based on selected scaffold
         """)
-        
+        st.subheader("📁 Data Input")
         # File upload
         uploaded_file = st.file_uploader(
             "Upload CSV with SMILES",

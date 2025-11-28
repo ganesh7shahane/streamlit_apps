@@ -29,6 +29,7 @@ class DataFrameAnalyzer(BaseAnalyzer):
         # Introduction
         self._display_intro()
         
+        st.subheader("📁 Data Input")
         # File upload
         uploaded_file = st.file_uploader("Upload CSV file", type=["csv"])
         
@@ -69,7 +70,7 @@ class DataFrameAnalyzer(BaseAnalyzer):
     
     def _data_cleaning_section(self):
         """Handle data cleaning options."""
-        st.subheader("Data Cleaning Options")
+        st.subheader("🧹Data Cleaning Options")
         
         if not self.smiles_col:
             st.info("No SMILES column found - data cleaning options unavailable")
@@ -186,7 +187,7 @@ class DataFrameAnalyzer(BaseAnalyzer):
     
     def _display_data_preview(self):
         """Display data preview."""
-        st.subheader("Dataset Preview")
+        st.subheader("🧿Dataset Preview")
         
         # Get current dataframe length (after any cleaning operations)
         current_df_length = len(self._df)

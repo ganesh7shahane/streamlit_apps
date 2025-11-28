@@ -35,7 +35,7 @@ class ScaffoldAnalyzer(BaseAnalyzer):
         - :red[Relate] scaffolds to activity distributions
         - :red[Visualize] scaffolds and members
         """)
-        
+        st.subheader("📁 Data Input")
         uploaded_file = st.file_uploader("Upload CSV with SMILES", type=["csv"], key="scaffold_upload")
         
         if not self._load_data(uploaded_file, self.config.DEFAULT_SCAFFOLD_URL):

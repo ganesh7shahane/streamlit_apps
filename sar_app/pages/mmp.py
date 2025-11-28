@@ -373,7 +373,7 @@ class MMPAnalyzer(BaseAnalyzer):
             st.info("Upload CSV or check 'Use hERG data'")
             return
         
-        with st.expander("📊 Data Preview"):
+        with st.expander("📊 Data Preview", expanded=True):
             st.dataframe(self._df.head(10))
         
         st.divider()
