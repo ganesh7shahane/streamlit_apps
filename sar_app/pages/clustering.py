@@ -7,7 +7,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from rdkit import Chem, DataStructs
-from rdkit.Chem import AllChem, Draw, rdRGroupDecomposition
+from rdkit.Chem import AllChem, Draw, rdRGroupDecomposition, PandasTools
 from rdkit.ML.Cluster import Butina
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -56,6 +56,54 @@ class ClusteringAnalyzer(BaseAnalyzer):
             )
             st.dataframe(self.df.head(n_rows), width='stretch')
             st.info(f"Total rows in dataset: {len(self.df)}")
+        
+        # Column selection
+        st.markdown("---")
+        st.subheader("📋 Define Columns and Parameters")
+        col_def1, col_def2, col_def3 = st.columns(3)
+        
+        all_columns = self.df.columns.tolist()
+        
+        # Determine default values (without setting session state)
+        default_id_col = 'ID' if 'ID' in all_columns else all_columns[0]
+        default_smiles_col = self.smiles_col if self.smiles_col else all_columns[0]
+        
+        numeric_cols = self.df.select_dtypes(include=[np.number]).columns.tolist()
+        default_activity_col = all_columns[0]
+        if numeric_cols:
+            for common_name in ['pchembl_value', 'activity', 'Activity', 'IC50', 'pIC50']:
+                if common_name in numeric_cols:
+                    default_activity_col = common_name
+                    break
+            else:
+                default_activity_col = numeric_cols[0]
+        
+        with col_def1:
+            id_column = st.selectbox(
+                "Select ID Column",
+                options=all_columns,
+                index=all_columns.index(st.session_state.get('clustering_id_col', default_id_col)) if st.session_state.get('clustering_id_col', default_id_col) in all_columns else 0,
+                help="Column containing unique identifiers",
+                key="clustering_id_col"
+            )
+        
+        with col_def2:
+            smiles_column = st.selectbox(
+                "Select SMILES Column",
+                options=all_columns,
+                index=all_columns.index(st.session_state.get('clustering_smiles_col', default_smiles_col)) if st.session_state.get('clustering_smiles_col', default_smiles_col) in all_columns else 0,
+                help="Column containing molecular SMILES",
+                key="clustering_smiles_col"
+            )
+        
+        with col_def3:
+            activity_column = st.selectbox(
+                "Select Activity Column",
+                options=numeric_cols if numeric_cols else all_columns,
+                index=(numeric_cols if numeric_cols else all_columns).index(st.session_state.get('clustering_activity_col', default_activity_col)) if st.session_state.get('clustering_activity_col', default_activity_col) in (numeric_cols if numeric_cols else all_columns) else 0,
+                help="Column containing activity values",
+                key="clustering_activity_col"
+            )
         
         # Configuration
         config = self._get_clustering_config()
@@ -148,7 +196,8 @@ class ClusteringAnalyzer(BaseAnalyzer):
     def _generate_fingerprints(self, df: pd.DataFrame, config: dict) -> List:
         """Generate molecular fingerprints."""
         fps = []
-        smiles_col = self.smiles_col
+        # Use the user-selected SMILES column from session state
+        smiles_col = st.session_state.get('clustering_smiles_col', self.smiles_col)
         
         for smi in df[smiles_col]:
             mol = MoleculeUtils.smiles_to_mol(smi)
@@ -270,7 +319,8 @@ class ClusteringAnalyzer(BaseAnalyzer):
         st.subheader("🔍 Cluster Details")
         
         clusters = results['clusters']
-        smiles_col = self.smiles_col
+        # Use the user-selected SMILES column from session state
+        smiles_col = st.session_state.get('clustering_smiles_col', self.smiles_col)
         
         # Sort by size
         sorted_clusters = sorted(enumerate(clusters), key=lambda x: len(x[1]), reverse=True)
@@ -367,7 +417,7 @@ class ClusteringAnalyzer(BaseAnalyzer):
     def _display_rgroup_table(self, results: dict, df: pd.DataFrame):
         """Display R-group decomposition table for selected cluster."""
         st.markdown("---")
-        st.subheader("🧪 R-group Table Analysis")
+        st.subheader("🧪 Decompose a selected cluster")
         
         st.markdown("""
         Perform R-group decomposition on a selected cluster:
@@ -377,7 +427,8 @@ class ClusteringAnalyzer(BaseAnalyzer):
         """)
         
         clusters = results['clusters']
-        smiles_col = self.smiles_col
+        # Use the user-selected SMILES column from session state
+        smiles_col = st.session_state.get('clustering_smiles_col', self.smiles_col)
         
         # Sort clusters by size
         sorted_clusters = sorted(enumerate(clusters), key=lambda x: len(x[1]), reverse=True)
@@ -387,7 +438,7 @@ class ClusteringAnalyzer(BaseAnalyzer):
         with col1:
             # Text area for core SMILES input
             core_smiles = st.text_area(
-                "Enter Core/Scaffold SMILES with R-groups",
+                "Enter Core/Scaffold SMILES with dummy atom attachment points",
                 value="[*]C(=O)c1ccc(N[*])c(O[*])c1",
                 height=100,
                 help="Use [*] to indicate attachment points for R-groups"
@@ -398,7 +449,7 @@ class ClusteringAnalyzer(BaseAnalyzer):
             cluster_options = [f"Cluster {idx+1} (Size: {len(cluster)})" 
                              for idx, cluster in sorted_clusters]
             selected_cluster_idx = st.selectbox(
-                "Select Cluster for R-group Analysis",
+                "Select cluster for R-group analysis from dropdown menu",
                 range(len(cluster_options)),
                 format_func=lambda x: cluster_options[x]
             )
@@ -472,6 +523,9 @@ class ClusteringAnalyzer(BaseAnalyzer):
         cluster_df = rgd_results['cluster_df']
         cluster_idx = rgd_results['cluster_idx']
         
+        # Use the user-selected SMILES column from session state
+        smiles_col = st.session_state.get('clustering_smiles_col', self.smiles_col)
+        
         st.markdown("---")
         st.subheader("📊 R-group Decomposition Results")
         
@@ -496,7 +550,7 @@ class ClusteringAnalyzer(BaseAnalyzer):
         
         # Show failed molecules if any
         if failed:
-            with st.expander(f"⚠️ Failed Molecules ({len(failed)})"):
+            with st.expander(f"⚠️ Number of molecules that failed to decompose: {len(failed)}"):
                 st.markdown("These molecules did not match the core structure:")
                 # Use iloc to get failed molecules by position
                 failed_df = cluster_df.iloc[failed].copy()
@@ -511,7 +565,7 @@ class ClusteringAnalyzer(BaseAnalyzer):
                     )._repr_html_()
                     st.components.v1.html(failed_html, height=700, scrolling=True)
                 except:
-                    st.dataframe(failed_df[[self.smiles_col, 'index']])
+                    st.dataframe(failed_df[[smiles_col, 'index']])
         
         # Get R-group names
         r_groups = sorted([x for x in rgd.keys() if x != "Core"])
@@ -589,12 +643,149 @@ class ClusteringAnalyzer(BaseAnalyzer):
                     except Exception as e:
                         st.error(f"Error displaying R-group structures: {str(e)}")
         
+        # Display R-group table with 2D structures
+        st.markdown("---")
+        st.subheader("📋 R-group Decomposition Table")
+        
+        # Show core structure again before the table
+        st.markdown("**Core Structure with R-group Positions:**")
+        if 'Core' in rgd:
+            core_with_rgroups = rgd['Core'][0]
+            st.image(Draw.MolToImage(core_with_rgroups, size=(400, 400)))
+        
+        st.markdown("**Molecules with R-group Substituents:**")
+        
+        # Add checkboxes and sorting options
+        col_check1, col_check2, col_sort1, col_sort2 = st.columns(4)
+        with col_check1:
+            show_molecule = st.checkbox("Include full molecule structure", value=False, key="show_molecule_structure")
+        with col_check2:
+            show_all_rows = st.checkbox("Display entire table", value=False, key="show_all_rgroup_rows")
+        
+        # Prepare dataframe for display
+        display_df = cluster_df.copy()
+        
+        # Add molecule column for main structure
+        display_df['Molecule'] = display_df[smiles_col].apply(Chem.MolFromSmiles)
+        
+        # Add R-group molecule columns
+        for rg in r_groups:
+            display_df[f'{rg}_mol'] = display_df[rg].apply(
+                lambda x: Chem.MolFromSmiles(x) if pd.notnull(x) else None
+            )
+        
+        # Identify available columns for sorting
+        numeric_cols = [col for col in display_df.columns 
+                       if pd.api.types.is_numeric_dtype(display_df[col]) 
+                       and col not in ['Cluster_Index']]
+        
+        with col_sort1:
+            if numeric_cols:
+                sort_by_activity = st.selectbox(
+                    "Sort by the table by",
+                    options=['None'] + numeric_cols,
+                    key="sort_activity_rgroup"
+                )
+            else:
+                sort_by_activity = 'None'
+        
+        with col_sort2:
+            if numeric_cols and sort_by_activity != 'None':
+                sort_order = st.selectbox(
+                    "Sort order",
+                    options=['Descending', 'Ascending'],
+                    key="sort_order_rgroup"
+                )
+            else:
+                sort_order = 'Descending'
+        
+        # Apply sorting
+        if sort_by_activity != 'None' and sort_by_activity in display_df.columns:
+            ascending = (sort_order == 'Ascending')
+            display_df = display_df.sort_values(sort_by_activity, ascending=ascending)
+        
+        # Select columns to display: ID/Name, activity, molecule, R-groups with structures
+        display_cols = []
+        
+        # Add identifier column if available
+        if 'Name' in display_df.columns:
+            display_cols.append('Name')
+        if 'ID' in display_df.columns:
+            display_cols.append('ID')
+        elif 'index' in display_df.columns:
+            display_cols.append('index')
+        
+        # Add activity columns (numeric columns that might be activity)
+        activity_cols = [col for col in display_df.columns 
+                        if pd.api.types.is_numeric_dtype(display_df[col]) 
+                        and col not in ['index', 'Cluster_Index', 'ID']]
+        display_cols.extend(activity_cols[:2])  # Show up to 2 activity columns
+        
+        # Add molecule structure if checkbox is selected
+        if show_molecule:
+            display_cols.append('Molecule')
+        
+        # Add R-group structures
+        for rg in r_groups:
+            display_cols.append(f'{rg}_mol')
+        
+        # Filter to available columns
+        display_cols = [col for col in display_cols if col in display_df.columns]
+        
+        # Create HTML table with molecule images
+        try:
+            import io
+            import base64
+            from PIL import Image
+            
+            # Function to convert RDKit mol to base64 image for HTML display
+            def mol_to_image_tag(mol, size=(150, 150)):
+                if mol is None:
+                    return ""
+                img = Draw.MolToImage(mol, size=size)
+                buffered = io.BytesIO()
+                img.save(buffered, format="PNG")
+                img_str = base64.b64encode(buffered.getvalue()).decode()
+                return f'<img src="data:image/png;base64,{img_str}" />'
+            
+            # Prepare display dataframe with HTML image tags
+            html_display_df = display_df[display_cols].head(20 if not show_all_rows else len(display_df)).copy()
+            
+            # Convert molecule columns to image HTML tags
+            if show_molecule and 'Molecule' in html_display_df.columns:
+                html_display_df['Molecule'] = html_display_df['Molecule'].apply(
+                    lambda x: mol_to_image_tag(x, size=(250, 250))
+                )
+            
+            for rg in r_groups:
+                if f'{rg}_mol' in html_display_df.columns:
+                    html_display_df[f'{rg}_mol'] = html_display_df[f'{rg}_mol'].apply(
+                        lambda x: mol_to_image_tag(x, size=(150, 150))
+                    )
+            
+            # Convert to HTML and display
+            html_table = html_display_df.to_html(escape=False, index=False)
+            st.markdown(html_table, unsafe_allow_html=True)
+            
+            if not show_all_rows and len(display_df) > 20:
+                st.info(f"Showing first 20 of {len(display_df)} molecules. Check 'Display entire table' to see all rows or download CSV for full data.")
+            
+        except Exception as e:
+            st.error(f"Error displaying table with structures: {str(e)}")
+            import traceback
+            with st.expander("Error details"):
+                st.code(traceback.format_exc())
+            # Fallback to regular dataframe
+            fallback_cols = [col for col in display_cols if not col.endswith('_mol')]
+            if fallback_cols:
+                st.dataframe(display_df[fallback_cols])
+        
         # Download option for R-group table
         st.markdown("---")
         st.subheader("💾 Download R-group Table")
         
         # Prepare download dataframe
-        download_cols = [self.smiles_col] + r_groups
+        download_cols = [smiles_col] + r_groups
         if 'Name' in cluster_df.columns:
             download_cols.insert(0, 'Name')
         
